@@ -41,7 +41,8 @@ out/
 .gptcache/
 .diskcache/
 .phoenix/
-.klerk/                       # checkpoint db, bg state, bg last cycle
+# .klerk/: checkpoint db + bg state + bg last cycle report
+.klerk/
 *.sqlite
 *.sqlite-journal
 *.sqlite-wal
