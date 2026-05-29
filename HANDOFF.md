@@ -80,7 +80,7 @@ response = client.chat.completions.create(
 | `src/klerk/rag/store.py` | ✅ LanceDB | Embedded vector store + Tantivy BM25 |
 | `src/klerk/rag/retrieve.py` | ✅ Hybrid | Vector + BM25 + RRF fusion |
 | `src/klerk/rag/fusion.py` | ✅ | RRF implementation |
-| `src/klerk/rag/rerank.py` | ✅ BGE-Reranker-v2-m3 | Cross-encoder rerank; CPU-only |
+| `src/klerk/rag/rerank.py` | ⚠️ REFACTOR (v5) | Drop separate BGE-Reranker; call `bge_m3_model.encode(..., return_colbert_vecs=True)` and use ColBERT vectors for late-interaction MaxSim scoring |
 | `src/klerk/rag/pagerank.py` | ⚠️ Over-eng | Tiebreaker; soft-demote to experimental |
 | `src/klerk/agent/contradiction.py` | ✅ | Backbone for Conflict Reporter (Option C) |
 | `src/klerk/agent/proposal_pipeline.py` | ✅ | Multi-drafter adversarial; will become Writer (Option D) |
@@ -135,16 +135,20 @@ response = client.chat.completions.create(
 
 ---
 
-## 5. Locked decisions (research-informed, v4)
+## 5. Locked decisions (research-informed, v5)
 
-> v4 corrects v3's incorrect assumption that the Nemotron bundle exposes embed + rerank endpoints. **The bundle exposes ONLY `nemotron-3-nano-omni` chat.** Per brief's Permitted clause, this mandates local embedding/reranking.
+> **v5 nuances on v4** (2026-05-29 PM, post-research on multimodal embedders):
+> 1. **Drop separate `BGE-Reranker-v2-m3`** — use BGE-M3's built-in ColBERT-style multi-vector head for late-interaction reranking. BGE-M3 has three output heads in one model (dense + sparse + ColBERT). Same vendor (BAAI), same weights file already loaded for embedding, ~1GB container reduction, one model load step instead of two, no quality regression on standard benchmarks. ~1h refactor to `src/klerk/rag/rerank.py`.
+> 2. **Vision-frontier exploration recorded but not shipped** — evaluated ColPali / ColQwen2.5-3b-multilingual / Jina-embeddings-v4 / NVIDIA `omni-embed-nemotron-3b` as candidates to collapse parser + embed + rerank into ONE component (page-image-embed → omnimodal-LLM-consumes-page-images path). None ship because: (a) Bahasa Indonesia + Japanese **not benchmarked** on any multimodal embedder (ViDoRe v2 multilingual track silent on both), (b) tables degrade to page blobs hurting structured action-item extraction and table-grounded queries, (c) CPU multi-vector retrieval ~800ms-1s/page vs ~5-10ms text-native dense (5-10× regression), (d) `omni-embed-nemotron-3b` is NVIDIA OneWay **Noncommercial** license — disqualifies for a commercial take-home. Document full rationale + benchmark table in `docs/design-decisions.md` so reviewer sees "we evaluated the frontier and chose hybrid for these reasons" not "we picked BGE-M3 because it was already there".
+>
+> **v4 banner** (preserved): v4 corrects v3's incorrect assumption that the Nemotron bundle exposes embed + rerank endpoints. **The bundle exposes ONLY `nemotron-3-nano-omni` chat.** Per brief's Permitted clause, this mandates local embedding/reranking.
 
 | Topic | Decision | Reasoning |
 |---|---|---|
 | **Chat LLM** | Single LiteLLM entry routing to `nemotron-3-nano-omni` via `proxy.atlas-horizon.com`. No fallbacks. | Brief forbids swapping; bundle pins this model |
 | **Embedding** | Keep BGE-M3 local (multilingual incl. Bahasa, CPU-friendly, Apache-2.0 license) | Bundle has no embed endpoint → brief Permitted clause |
-| **Reranker** | Keep BGE-Reranker-v2-m3 local (cross-encoder, multilingual, CPU-friendly) | Bundle has no rerank endpoint → local-only allowed |
-| **Container size** | Accept ~2.5GB (torch + sentence-transformers + BGE weights). No GPU assumed. | Brief-spec compliance overrides container-size optimization |
+| **Reranker** | **No separate reranker model** (v5). Use BGE-M3's ColBERT (multi-vector late-interaction) head — same model file already loaded for dense + sparse embedding. MaxSim scoring at rerank time. | v5 refinement: BGE-M3 has 3 output heads (dense + sparse + ColBERT); ColBERT-mode rivals separate cross-encoder on standard benchmarks; saves ~1GB container weight + eliminates a second model load |
+| **Container size** | ~1.5-2GB (torch + sentence-transformers + BGE-M3 only, no separate reranker model). No GPU assumed. | v5: reduced from ~2.5GB after dropping BGE-Reranker-v2-m3 in favor of BGE-M3 ColBERT head |
 | **Vector store** | LanceDB embedded (already done; no separate DB container in compose) | Brief allows; embedded simplifies docker compose |
 | **Parser** | Docling primary + PyMuPDF fallback. MinerU 2.5 NOT shipped (April 2026 MDPBench shows 14% accuracy drop on non-Latin scripts — risky for Bahasa) | Research finding; safety-first for Indonesian docs |
 | **Hybrid retrieval** | Vector (LanceDB) + BM25 (Tantivy) + RRF fusion + cross-encoder rerank | Brief asks ≥1 improvement; we do hybrid + rerank (both top-shelf, both Should-Have) |
@@ -174,6 +178,9 @@ response = client.chat.completions.create(
 - MinerU 2.5 — non-Latin script risk
 - LanceDB semantic cache — DiskCache exact-match is enough
 - PageRank tiebreaker — cross-encoder is sufficient
+- **Vision-language embedders (ColPali / ColQwen2.5-multilingual / Jina-embeddings-v4)** (v5 explicit) — Bahasa/JP not benchmarked on multimodal embedders, tables degrade to page blobs, CPU multi-vector retrieval 5-10× slower than text-native hybrid. Full evaluation matrix in `docs/design-decisions.md`.
+- **NVIDIA `omni-embed-nemotron-3b`** (v5 explicit) — NVIDIA OneWay Noncommercial license disqualifies for commercial take-home; mentioned as a notable also-ran in `docs/design-decisions.md` since it's the multimodal cousin of our chat model.
+- **Separate cross-encoder reranker** (was BGE-Reranker-v2-m3 in v4) — BGE-M3's ColBERT head handles late-interaction reranking; one model file does both embed + rerank.
 - Multi-tenancy / API auth / user accounts — brief Explicit Non-Requirements
 
 ---
@@ -203,7 +210,7 @@ response = client.chat.completions.create(
    │   │ + manifest  │    │ embed BGE-M3│    │            ││
    │   │ + changes   │    │ store Lance │    │ C: LangGr. ││
    │   └─────────────┘    │ retrieve    │    │ orchestrate││
-   │                      │ rerank BGE-r│    └─────┬──────┘│
+   │                      │ rerank M3-CB│    └─────┬──────┘│
    │                      └──────┬──────┘          │       │
    │                             │                 │       │
    │                             └────────┬────────┘       │
@@ -230,7 +237,7 @@ retrieve_docs ──▶ pair_facts ──▶ judge_conflict ──▶ format_rep
 
 ## 7. Next steps (ordered, ~18h)
 
-1. **Demote + cleanup pass** (~1h)
+1. **Demote + cleanup pass + reranker refactor** (~1.5h, +0.5h for v5 rerank refactor)
    - `git mv klerk-cli/ experimental/ts-shell/`
    - `git mv pi-extension-klerk/ experimental/pi-extension/`
    - `git mv src/klerk/agent/checkpoint.py experimental/`
@@ -240,6 +247,7 @@ retrieve_docs ──▶ pair_facts ──▶ judge_conflict ──▶ format_rep
    - Write `experimental/README.md` (per-item rationale)
    - Strip fallback vars from `.env.example` (keep only LITELLM_KEY, CF_CLIENT_ID, CF_CLIENT_SECRET, PROXY_URL, GOOGLE_APPLICATION_CREDENTIALS, DRIVE_FOLDER_ID)
    - `pyproject.toml`: drop apscheduler/watchdog from main; re-add under `[project.optional-dependencies] scheduled` extra; bump `textual>=0.86`; add `langgraph>=0.2.0`; update description
+   - **(v5) Refactor `src/klerk/rag/rerank.py`**: drop the separate `BAAI/bge-reranker-v2-m3` SentenceTransformer load entirely. Instead, call the already-loaded BGE-M3 model with `model.encode(texts, return_colbert_vecs=True, return_dense=False, return_sparse=False)` at index time to cache token-level vectors alongside chunks. At rerank time, compute MaxSim(query_colbert_vecs, doc_colbert_vecs) for the top-k retrieved chunks and re-sort. Remove `bge-reranker-v2-m3` from `pyproject.toml` extras + any pre-fetch / Docker pre-bake scripts. Update `tests/test_imports.py` and add `tests/test_rerank_colbert.py` (sanity: identical query > paraphrase > unrelated).
 
 2. **FastAPI server** (~4h)
    - `src/klerk/api/server.py`: 8 endpoints
@@ -254,7 +262,7 @@ retrieve_docs ──▶ pair_facts ──▶ judge_conflict ──▶ format_rep
    - Test: `tests/test_drive_sync.py` (manifest diff correctness with mocked Drive responses)
 
 4. **Docker** (~1h)
-   - `Dockerfile`: python:3.11-slim, multi-stage (build → runtime); pre-download BGE-M3 + BGE-Reranker weights so cold-start doesn't fetch ~2GB
+   - `Dockerfile`: python:3.11-slim, multi-stage (build → runtime); pre-download BGE-M3 weights (~1.2GB; single model — no separate reranker per v5) so cold-start doesn't fetch on first run
    - `docker-compose.yml`: services `api` (FastAPI + LanceDB embedded) + `phoenix` (:6006); optional commented `gws-mcp` service
    - Verify `docker compose up` from clean checkout end-to-end
 
@@ -304,7 +312,8 @@ retrieve_docs ──▶ pair_facts ──▶ judge_conflict ──▶ format_rep
     - LLM-as-judge with bias disclosure
     - Aggregate: overall, by-category, by-locale, TTFT/total p50/p99
     - Honest failure analysis
-    - README full rewrite: brief-aligned, FastAPI-first, technical depth, ASCII arch diagram + LangGraph mermaid, design decisions (incl. why local BGE), OpenJarvis/Hermes/OpenClaw design-influences credit, agentskills.io section, Workspace CLI advanced section, limitations, hardware notes
+    - README full rewrite: brief-aligned, FastAPI-first, technical depth, ASCII arch diagram + LangGraph mermaid, design decisions (incl. why local BGE-M3 with ColBERT-head reranking, why NOT ColPali / ColQwen2.5-multilingual / Jina-v4 / omni-embed-nemotron-3b), OpenJarvis/Hermes/OpenClaw design-influences credit, agentskills.io section, Workspace CLI advanced section, limitations, hardware notes
+    - **Write `docs/design-decisions.md` vision-frontier section** (v5 nuance 2): benchmark matrix comparing ColPali / ColQwen2.5-multilingual / Jina-v4 / omni-embed-nemotron-3b / BGE-M3 with columns: params, multilingual (Bahasa? JP?), table-structure preservation, CPU latency per page, license, container delta. Conclusion paragraph: chose BGE-M3 hybrid with ColBERT-head reranking; revisit if corpus becomes figure-heavy or multimodal embedders gain Bahasa/JP benchmark coverage.
     - Strip docs/2026-landscape.md → one short "explorations" section
 
 12. **Final smoke + commit + merge to main** (~30 min)
@@ -375,9 +384,9 @@ document-intelligence-assistant/
 | Risk | Severity | Mitigation |
 |---|---|---|
 | Bundle README doesn't doc concurrent-request limits | Medium | Multi-drafter writer = 2-3 concurrent calls; well below typical LiteLLM defaults. Fallback: sequential drafts on 429. |
-| BGE-M3 + BGE-Reranker weights cold-fetch ~2GB on first container run | Medium | Pre-bake into Docker image via multi-stage build; document image size in README |
+| BGE-M3 weights cold-fetch ~1.2GB on first container run (v5: single model, no separate reranker) | Medium | Pre-bake into Docker image via multi-stage build; document image size in README |
 | CF Access service token expires ~2026-08-26 (90-day key, issued 2026-05-28) | High at expiry | Document rotation steps in README; flag in submission email |
-| All-local embedding/reranker = full ~2.5GB container | Low (necessary) | Brief mandates this; document hardware notes |
+| All-local embedding (BGE-M3 with ColBERT-head reranking, no separate reranker) = ~1.5-2GB container | Low (necessary) | Brief mandates local; v5 reduced size by ~1GB vs v4 by collapsing reranker into BGE-M3 |
 | MinerU 2.5 omitted despite SOTA layout | Low | 14% non-Latin script accuracy drop (MDPBench Apr 2026) is too risky for Bahasa docs; Docling is safer |
 | First-time Drive sync latency (60-90s for 25-30 docs) | Medium | FastAPI BackgroundTasks; `/ingest` returns 202; clients poll `/sync-status` |
 | LLM-judge bias (judge = generator model) | Medium | Disclose in EVAL.md; use retrieval recall@k as secondary metric grounded outside LLM |
