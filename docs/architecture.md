@@ -5,12 +5,16 @@
 ## At a glance
 
 ```
-                   Nemotron NIM (integrate.api.nvidia.com/v1, OpenAI-compatible)
+                   Nemotron proxy — llm-proxy.atlas-horizon.com/v1
+                   (private Cloudflare-tunneled LiteLLM, OpenAI-compatible,
+                    single-model: nemotron-3-nano-omni)
                           ▲                     ▲                     ▲
                           │                     │ Bahasa fallback     │ stretch
+                          │ (CF Access headers) │ (only if separate   │
+                          │                     │  KLERK_QWEN_BASE_URL│
                   ┌───────┴────────┐    ┌───────┴────────┐    ┌──────┴─────────┐
-                  │ LiteLLM SDK    │    │ Qwen3 (NIM/HF) │    │ Anthropic /    │
-                  │ router + cost  │    │ when --locale id│   │ OpenAI fallbk  │
+                  │ LiteLLM SDK    │    │ Qwen3 / local  │    │ Anthropic /    │
+                  │ router + cost  │    │ llama.cpp      │    │ OpenAI fallbk  │
                   └───────┬────────┘    └────────────────┘    └────────────────┘
                           │
                           │ + DiskCache (exact) + LanceDB llm_cache (semantic)

@@ -154,13 +154,17 @@ def smoke() -> None:
     table.add_column("value")
     table.add_row("base_url", cfg.base_url)
     table.add_row("model", cfg.model)
-    table.add_row("api_key", "***set***" if cfg.api_key else "[red](not set — export NVIDIA_API_KEY)[/red]")
+    table.add_row("api_key", "***set***" if cfg.api_key else "[red](not set — export LITELLM_KEY)[/red]")
+    table.add_row(
+        "cf_headers",
+        "***set (CF_CLIENT_ID + CF_CLIENT_SECRET)***" if cfg.cf_headers else "[yellow](not set — proxy will 403)[/yellow]",
+    )
     console.print(table)
 
     if not cfg.api_key:
         console.print(
-            "\n[yellow]NVIDIA_API_KEY not set; skipping live LLM round-trip. "
-            "Copy .env.example to .env and fill in the key to enable.[/yellow]"
+            "\n[yellow]LITELLM_KEY not set; skipping live LLM round-trip. "
+            "Copy .env.example to .env and fill in LITELLM_KEY + CF_CLIENT_ID + CF_CLIENT_SECRET to enable.[/yellow]"
         )
         _phoenix_section()
         raise typer.Exit(code=0)

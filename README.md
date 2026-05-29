@@ -13,8 +13,8 @@ Take-home for the **Middle AI Engineer** role at **PT Fata Organa Solusi** (Indo
 # 1. install (uv + pnpm, ~3 min on cold cache)
 make setup
 
-# 2. set your Nemotron key
-cp .env.example .env  &&  $EDITOR .env   # NVIDIA_API_KEY=...
+# 2. set your Nemotron proxy credentials (from the password-zip user-package)
+cp .env.example .env  &&  $EDITOR .env   # LITELLM_KEY + CF_CLIENT_ID + CF_CLIENT_SECRET
 
 # 3. end-to-end on the seed corpus (3 hand-authored docs, 40% Bahasa)
 make demo
@@ -31,7 +31,8 @@ To run klerk on your own documents: drop them into `data/raw/` and re-run `klerk
 ## Four surfaces, one backend
 
 ```
-                   Nemotron NIM  ←→  Qwen3 (--locale id)  ←→  fallbacks (stretch)
+       Nemotron proxy (llm-proxy.atlas-horizon.com/v1, single-model:
+       nemotron-3-nano-omni; CF-Access service token + LiteLLM key)
                           ▲
                           │  via LiteLLM SDK (in-process, fallbacks + cost + cache)
                           │  + DiskCache exact + LanceDB semantic cache + Pydantic AI
@@ -182,7 +183,7 @@ Goose, Cursor, and Pi work the same way. The Pi extension `@yohnmaistre/pi-exten
 |---|---|
 | Chat harness | klerk-cli (TS, Ink) + Pi as hidden runtime |
 | Orchestration | Hand-rolled (`agent/crag.py`, `agent/proposal_pipeline.py`); no LangGraph |
-| LLM gateway | LiteLLM SDK (in-process); Nemotron NIM + Qwen3 (Bahasa) + optional fallbacks |
+| LLM gateway | LiteLLM SDK (in-process); Nemotron proxy (CF Access + Bearer) + optional Bahasa endpoint + optional fallbacks |
 | Vector + BM25 | LanceDB native hybrid (Tantivy FTS, March 2026) |
 | Embeddings | BGE-M3 (multilingual, self-hosted) |
 | Reranker | BGE-Reranker-v2-m3 (cross-encoder) |
@@ -205,7 +206,7 @@ git clone https://github.com/yohn-maistre/document-intelligence-assistant
 cd document-intelligence-assistant
 make setup
 
-# point at your Nemotron
+# point at the Nemotron proxy (LITELLM_KEY + CF_CLIENT_ID + CF_CLIENT_SECRET)
 cp .env.example .env  &&  $EDITOR .env
 
 # index the bundled seed corpus (3 docs, 40% Bahasa, cross-doc facts seeded)

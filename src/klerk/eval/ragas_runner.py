@@ -80,7 +80,7 @@ def run(items: list[GoldenItem]) -> RagasReport:
     if not rows:
         return RagasReport(
             available=True,
-            reason="No rows produced (likely missing NVIDIA_API_KEY).",
+            reason="No rows produced (likely missing LITELLM_KEY + CF_CLIENT_* credentials).",
             items=[],
             aggregate={},
         )

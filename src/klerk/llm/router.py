@@ -26,16 +26,23 @@ from klerk.llm.cache import lookup, store
 from klerk.llm.nemotron import NemotronConfig
 
 
-def _bahasa_model() -> str:
-    qwen = os.environ.get("KLERK_QWEN_MODEL", "qwen/qwen3-235b-instruct")
-    return f"openai/{qwen}"
-
-
 def _select_model(locale: str) -> tuple[str, str]:
-    """Return (litellm_model, base_url) for the given locale."""
+    """Return (litellm_model, base_url) for the given locale.
+
+    Honest note about --locale id: the disclosed Nemotron proxy is
+    single-model (`nemotron-3-nano-omni`); there's no separate Bahasa-tuned
+    endpoint here. If the operator sets KLERK_QWEN_BASE_URL + KLERK_QWEN_MODEL
+    pointing at a different proxy (e.g. the local llama.cpp from
+    scripts/setup-local-llm.sh), we route there. Otherwise --locale id falls
+    through to the same nemotron-3-nano-omni model, which is multilingual.
+    """
     cfg = NemotronConfig.from_env()
-    if locale == "id":
-        return _bahasa_model(), os.environ.get("KLERK_QWEN_BASE_URL", cfg.base_url)
+    if locale == "id" and os.environ.get("KLERK_QWEN_BASE_URL"):
+        bahasa_model = os.environ.get("KLERK_QWEN_MODEL", "qwen/qwen3-235b-instruct")
+        bahasa_base = os.environ["KLERK_QWEN_BASE_URL"].rstrip("/")
+        if not bahasa_base.endswith("/v1"):
+            bahasa_base += "/v1"
+        return f"openai/{bahasa_model}", bahasa_base
     return cfg.litellm_model, cfg.base_url
 
 
@@ -96,6 +103,11 @@ def complete(
         "temperature": temperature,
         "locale": locale,
     }
+    # Cloudflare Access headers (from the password-zip config). LiteLLM passes
+    # `extra_headers` through to the underlying HTTP call.
+    cf = cfg.cf_headers
+    if cf:
+        kwargs["extra_headers"] = cf
     if max_tokens is not None:
         kwargs["max_tokens"] = max_tokens
     if response_format is not None:
