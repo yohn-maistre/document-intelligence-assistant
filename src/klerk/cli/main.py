@@ -104,6 +104,23 @@ bg_app.command("status", help="Show the last cycle's report.")(bg_status_cmd)
 trace_app.command("list", help="List recent checkpoint runs.")(trace_list_cmd)
 
 
+# ── studio ──────────────────────────────────────────────────────────────────
+@app.command("studio", help="Launch the Textual operator TUI (5 panels).")
+def studio_cmd(
+    serve: Annotated[bool, typer.Option("--serve", help="STRETCH: browser via textual-web.")] = False,
+) -> None:
+    """Open klerk studio — corpus / eval / traces / proposals / KG."""
+    from klerk.studio.app import KlerkStudio
+
+    if serve:
+        console.print(
+            "[yellow]--serve needs textual-web in a separate venv "
+            "(textual-web pins old textual <0.44). See docs/design-decisions.md.[/yellow]"
+        )
+        raise typer.Exit(code=0)
+    KlerkStudio().run()
+
+
 # ─── Top-level utility verbs ─────────────────────────────────────────────────
 @app.command()
 def version() -> None:
