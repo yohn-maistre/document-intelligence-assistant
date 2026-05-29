@@ -151,7 +151,9 @@ response = client.chat.completions.create(
 | **Drive integration** | Service Account (non-interactive, no OAuth consent during `docker compose up`) + manifest-based diff at `.klerk/drive-manifest.json` + Drive API `changes.list` with `pageToken` | Reviewer doesn't have to walk an OAuth flow |
 | **Google Workspace CLI `gws`** | Opt-in only: optional compose service `gws-mcp` for advanced agentic Calendar/Gmail/Sheets reach. NOT on the `/ingest` path. | `gws` is pre-1.0; SDK is GA. Two integration points kept independent. |
 | **Agentic capabilities** | All 5: A (Escalation), B (Action Items), C (Conflict — LangGraph spine), D (Writer — multi-drafter adversarial), E (Drift — scheduled). Brief asks ≥1; we ship 5. | User direction: push beyond brief on agentic surface |
-| **Writer scope** | **Multi-drafter adversarial** (Drafter-A + Drafter-B + Adjudicator, ~400 LOC, ~5h). Concurrency safe per bundle README (no documented hard limit; LiteLLM defaults are permissive). Fallback to sequential drafts if 429s. | User condition: "if concurrent endpoint usage works, multi-drafter" — verified |
+| **Writer scope** | **Multi-drafter adversarial** (Drafter-A + Drafter-B + Adjudicator, ~400 LOC, ~5h). Verified safe against both docs: brief is silent on concurrent-request limits; bundle README documents no RPM/TPM cap, only "retry ~30s on timeout under load". LiteLLM proxies default to concurrent-friendly. Sequential fallback on 429. | User confirmed 2026-05-29 conditional on docs allowing concurrency — verified above |
+| **LiteLLM hosting** | **In-process Python library** imported into FastAPI. No sidecar container. Already wired this way in `src/klerk/llm/`. | User confirmed 2026-05-29. Sidecar pattern reserved for if/when virtual-key per-team-budget becomes a real requirement. |
+| **Drift agent execution** | **Both modes**: `GET /drift/recent` (on-demand, returns last N events from `.klerk/drift-events.jsonl`) + `POST /drift/scan` (manual trigger of a fresh scan, returns immediately with run_id) + scheduled nightly run via APScheduler at 02:00 UTC writing to the same JSONL. Manual endpoint always works regardless of scheduler state. | User confirmed 2026-05-29. |
 | **LangGraph** | Spine for Conflict Reporter ONLY: 4-node `StateGraph` (retrieve_docs → pair_facts → judge_conflict → format_report). Single-loop Hermes-style for all other agents. | Signals "we know when graph vs loop"; minimal scope, ~150 LOC |
 | **Pydantic AI** | Already in deps. Use for typed outputs at every agent boundary. | Free win; eliminates string-parsing brittleness |
 | **agentskills.io spec** | Adopt for all 5 capabilities — one YAML manifest each in `src/klerk/agent/skills/`. Portable; importable by OpenJarvis/Hermes/OpenClaw users. | Ecosystem-aware signal; ~150 LOC total |
@@ -242,7 +244,7 @@ retrieve_docs ──▶ pair_facts ──▶ judge_conflict ──▶ format_rep
 2. **FastAPI server** (~4h)
    - `src/klerk/api/server.py`: 8 endpoints
    - `POST /chat` (SSE), `POST /ingest` (BackgroundTask, returns 202), `GET /sync-status`, `GET /health`
-   - `POST /actions/extract` (B), `POST /conflicts/scan` (C), `POST /draft` (D), `GET /drift/recent` (E)
+   - `POST /actions/extract` (B), `POST /conflicts/scan` (C), `POST /draft` (D), `GET /drift/recent` + `POST /drift/scan` (E)
    - Pydantic validation; FastAPI exception handlers; latency middleware (TTFT + total)
    - Test: `tests/test_api_endpoints.py`
 
