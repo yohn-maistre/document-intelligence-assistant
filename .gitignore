@@ -41,6 +41,7 @@ out/
 .gptcache/
 .diskcache/
 .phoenix/
+.klerk/                       # checkpoint db, bg state, bg last cycle
 *.sqlite
 *.sqlite-journal
 *.sqlite-wal
@@ -48,6 +49,7 @@ out/
 data/raw/
 data/parsed/
 data/output/
+data/kg/
 data/synth/.cache/
 
 # ─── Tooling / IDE ───────────────────────────────────────────────────────────
