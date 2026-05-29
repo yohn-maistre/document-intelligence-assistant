@@ -48,6 +48,9 @@ app.add_typer(kg_app)
 # ── Single-verb commands attached at top level ──
 from klerk.cli.parse_cmd import parse_cmd  # noqa: E402
 from klerk.cli.ask_cmd import ask_cmd  # noqa: E402
+from klerk.cli.propose_cmd import propose_cmd  # noqa: E402
+from klerk.cli.contradict_cmd import scan_cmd as contradict_scan_cmd  # noqa: E402
+from klerk.cli.faq_cmd import build_cmd as faq_build_cmd  # noqa: E402
 from klerk.cli import index_cmd, search_cmd, kg_cmd  # noqa: E402
 
 app.command("parse", help="Parse one file (Docling / native / PyMuPDF fallback).")(parse_cmd)
@@ -65,6 +68,15 @@ search_app.command("hybrid", help="Hybrid: vector + BM25 + RRF + BGE-Reranker.")
 kg_app.command("extract", help="Build the KG over every indexed chunk.")(kg_cmd.extract)
 kg_app.command("stats", help="Show KG entity/relation counts.")(kg_cmd.stats)
 kg_app.command("show", help="Print entities + relations (Rich panels).")(kg_cmd.show)
+
+# contradict + faq subcommand groups
+contradict_app = typer.Typer(name="contradict", help="Pairwise contradiction scan over the KG.", no_args_is_help=True)
+faq_app = typer.Typer(name="faq", help="Corpus Learning Agent — auto-FAQ.", no_args_is_help=True)
+app.add_typer(contradict_app)
+app.add_typer(faq_app)
+
+contradict_app.command("scan", help="Run the contradiction sweep, write the report.")(contradict_scan_cmd)
+faq_app.command("build", help="Propose questions per doc + answer them with citations.")(faq_build_cmd)
 
 
 # ─── Top-level utility verbs ─────────────────────────────────────────────────
@@ -172,17 +184,7 @@ def chat(
 
 # ─── Q&A and proposal verbs ──────────────────────────────────────────────────
 app.command("ask", help="Q&A over the corpus (CRAG-lite + citations).")(ask_cmd)
-
-
-@app.command()
-def propose(
-    topic: Annotated[str, typer.Argument(help="Proposal topic.")],
-    sections: Annotated[int, typer.Option("--sections", "-n")] = 3,
-    locale: Annotated[str, typer.Option("--locale", "-l")] = "en",
-) -> None:
-    """Adversarial proposal pipeline (h11–14.5)."""
-    _ = topic, sections, locale
-    console.print("[dim]propose: implemented in h11–14.5[/dim]")
+app.command("propose", help="Adversarial proposal pipeline (Drafter-A vs Drafter-B + Adjudicator + Critic).")(propose_cmd)
 
 
 def main() -> None:
