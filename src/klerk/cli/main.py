@@ -83,6 +83,26 @@ from klerk.cli.eval_cmd import run_cmd as eval_run_cmd  # noqa: E402
 
 eval_app.command("run", help="Run RAGAS + 5-axis rubric + SEA-HELM-style Bahasa parity.")(eval_run_cmd)
 
+# ── SHOULD-tier verbs: anomaly, kg viz, bg, trace ─────────────────────────
+from klerk.cli.should_cmds import (  # noqa: E402
+    anomaly_scan_cmd,
+    bg_start_cmd,
+    bg_status_cmd,
+    kg_viz_cmd,
+    trace_list_cmd,
+)
+
+anomaly_app = typer.Typer(name="anomaly", help="Surface outlier docs that don't fit the corpus.", no_args_is_help=True)
+app.add_typer(anomaly_app)
+anomaly_app.command("scan", help="z-score scan over doc-centroid distances + LLM justifications.")(anomaly_scan_cmd)
+
+kg_app.command("viz", help="Render the KG to interactive HTML (pyvis).")(kg_viz_cmd)
+
+bg_app.command("start", help="Run the background ingestion agent.")(bg_start_cmd)
+bg_app.command("status", help="Show the last cycle's report.")(bg_status_cmd)
+
+trace_app.command("list", help="List recent checkpoint runs.")(trace_list_cmd)
+
 
 # ─── Top-level utility verbs ─────────────────────────────────────────────────
 @app.command()
