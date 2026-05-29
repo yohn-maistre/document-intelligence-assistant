@@ -43,6 +43,21 @@ app.add_typer(eval_app)
 app.add_typer(trace_app)
 app.add_typer(bg_app)
 
+# ── Single-verb commands attached at top level ──
+from klerk.cli.parse_cmd import parse_cmd  # noqa: E402
+from klerk.cli import index_cmd, search_cmd  # noqa: E402
+
+app.command("parse", help="Parse one file (Docling / native / PyMuPDF fallback).")(parse_cmd)
+
+# index subcommands
+index_app.command("build", help="Parse + chunk + embed + upsert.")(index_cmd.build)
+index_app.command("stats", help="Show current corpus stats.")(index_cmd.show_stats)
+
+# search subcommands
+search_app.command("bm25", help="BM25 search (LanceDB native FTS).")(search_cmd.bm25)
+search_app.command("vector", help="Vector search (BGE-M3 + LanceDB cosine).")(search_cmd.vector)
+search_app.command("hybrid", help="Hybrid: vector + BM25 + RRF + BGE-Reranker.")(search_cmd.hybrid)
+
 
 # ─── Top-level utility verbs ─────────────────────────────────────────────────
 @app.command()

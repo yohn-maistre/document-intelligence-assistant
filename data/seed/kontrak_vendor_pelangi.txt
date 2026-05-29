@@ -1,0 +1,52 @@
+KONTRAK JASA KONSULTAN
+PT Pelangi Konsultindo — Acme Corp
+
+Nomor kontrak: PLG/CONS/2026/047
+Tanggal efektif: 1 Maret 2026
+Jangka waktu: 6 (enam) bulan
+
+PARA PIHAK
+
+PIHAK PERTAMA: PT Pelangi Konsultindo, perseroan terbatas yang didirikan berdasarkan hukum Republik Indonesia, beralamat di Menara Kuningan Lantai 12, Jakarta Selatan, dalam hal ini diwakili oleh Bapak Iwan Santoso selaku Direktur Utama ("Pelangi").
+
+PIHAK KEDUA: Acme Corp Singapore Pte. Ltd., perusahaan yang didirikan berdasarkan hukum Singapura, beralamat di 1 Raffles Place #20-61, Singapore 048616, dalam hal ini diwakili oleh Ms. Sarah Lim selaku General Counsel ("Acme").
+
+PASAL 1 — LINGKUP JASA
+
+Pelangi setuju untuk menyediakan jasa konsultasi advisory untuk transformasi digital Acme di wilayah Asia Tenggara, mencakup:
+
+(a) Penilaian arsitektur teknologi yang ada;
+(b) Penyusunan peta jalan modernisasi 18 bulan;
+(c) Pendampingan tim internal Acme dalam fase implementasi awal.
+
+PASAL 2 — TARIF DAN PEMBAYARAN
+
+Tarif konsultan: USD 185 per jam untuk pekerjaan advisory, sesuai dengan kebijakan tarif konsultan eksternal Acme (HR-POL-2026-001, Pasal 4). Pekerjaan implementasi yang dilakukan oleh tim Pelangi akan ditagih dengan tarif USD 145 per jam.
+
+Penagihan dilakukan bulanan dengan rincian jam terverifikasi. Pembayaran jatuh tempo dalam 30 hari kalender setelah tanggal invoice.
+
+Total nilai kontrak tidak melebihi USD 250,000 tanpa amendemen tertulis.
+
+PASAL 3 — JANGKA WAKTU DAN PERPANJANGAN
+
+Kontrak berlaku selama 6 bulan sejak tanggal efektif. Sesuai kebijakan Acme, keterlibatan konsultan yang melampaui 6 bulan akan secara otomatis dikonversi menjadi perjanjian fixed-fee untuk mengendalikan eksposur biaya.
+
+Setiap perpanjangan harus disetujui secara tertulis oleh Acme VP of Engineering dan dicatatkan dalam berkas pengadaan.
+
+PASAL 4 — KERAHASIAAN
+
+Para Pihak setuju untuk menjaga kerahasiaan semua informasi yang diperoleh selama pelaksanaan kontrak ini selama 3 (tiga) tahun setelah berakhirnya kontrak.
+
+PASAL 5 — HAK KEKAYAAN INTELEKTUAL
+
+Semua deliverable yang dihasilkan dalam lingkup kontrak ini menjadi milik penuh Acme. Pelangi mempertahankan hak atas metodologi, alat, dan template umum yang digunakan dalam pelaksanaan jasa.
+
+PASAL 6 — PENYELESAIAN SENGKETA
+
+Sengketa yang timbul dari atau berkaitan dengan kontrak ini akan diselesaikan melalui arbitrase BANI (Badan Arbitrase Nasional Indonesia) di Jakarta, sesuai aturan BANI yang berlaku.
+
+Ditandatangani di Jakarta, 1 Maret 2026.
+
+PT Pelangi Konsultindo                    Acme Corp Singapore Pte. Ltd.
+Iwan Santoso                              Sarah Lim
+Direktur Utama                            General Counsel
