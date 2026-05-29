@@ -34,6 +34,7 @@ drive_app = typer.Typer(name="drive", help="Google Drive ingestion.", no_args_is
 eval_app = typer.Typer(name="eval", help="RAGAS + custom rubric + SEA-HELM eval.", no_args_is_help=True)
 trace_app = typer.Typer(name="trace", help="Phoenix trace inspection.", no_args_is_help=True)
 bg_app = typer.Typer(name="bg", help="Background ingestion agent.", no_args_is_help=True)
+kg_app = typer.Typer(name="kg", help="Knowledge graph extraction + inspection.", no_args_is_help=True)
 
 app.add_typer(synth_app)
 app.add_typer(index_app)
@@ -42,10 +43,12 @@ app.add_typer(drive_app)
 app.add_typer(eval_app)
 app.add_typer(trace_app)
 app.add_typer(bg_app)
+app.add_typer(kg_app)
 
 # ── Single-verb commands attached at top level ──
 from klerk.cli.parse_cmd import parse_cmd  # noqa: E402
-from klerk.cli import index_cmd, search_cmd  # noqa: E402
+from klerk.cli.ask_cmd import ask_cmd  # noqa: E402
+from klerk.cli import index_cmd, search_cmd, kg_cmd  # noqa: E402
 
 app.command("parse", help="Parse one file (Docling / native / PyMuPDF fallback).")(parse_cmd)
 
@@ -57,6 +60,11 @@ index_app.command("stats", help="Show current corpus stats.")(index_cmd.show_sta
 search_app.command("bm25", help="BM25 search (LanceDB native FTS).")(search_cmd.bm25)
 search_app.command("vector", help="Vector search (BGE-M3 + LanceDB cosine).")(search_cmd.vector)
 search_app.command("hybrid", help="Hybrid: vector + BM25 + RRF + BGE-Reranker.")(search_cmd.hybrid)
+
+# kg subcommands
+kg_app.command("extract", help="Build the KG over every indexed chunk.")(kg_cmd.extract)
+kg_app.command("stats", help="Show KG entity/relation counts.")(kg_cmd.stats)
+kg_app.command("show", help="Print entities + relations (Rich panels).")(kg_cmd.show)
 
 
 # ─── Top-level utility verbs ─────────────────────────────────────────────────
@@ -162,15 +170,8 @@ def chat(
     )
 
 
-# ─── Placeholder verbs filled in over the build ──────────────────────────────
-@app.command()
-def ask(
-    question: Annotated[str, typer.Argument(help="Question to answer over the corpus.")],
-    locale: Annotated[str, typer.Option("--locale", "-l")] = "en",
-) -> None:
-    """Q&A over the corpus (h7.5–9.5)."""
-    _ = question, locale
-    console.print("[dim]ask: implemented in h7.5–9.5[/dim]")
+# ─── Q&A and proposal verbs ──────────────────────────────────────────────────
+app.command("ask", help="Q&A over the corpus (CRAG-lite + citations).")(ask_cmd)
 
 
 @app.command()
