@@ -1,0 +1,39 @@
+# Golden Q&A — Bahasa Indonesia, calibrated to data/seed/.
+# Used by `klerk eval run --seahelm` for the Bahasa parity report.
+#
+# Reviewer expands this file when they drop real Bahasa docs into data/raw/.
+
+- id: id-single-001
+  question: "Berapa tarif konsultan advisory PT Pelangi Konsultindo per jam?"
+  expected_chunks: ["kontrak_vendor_pelangi:0", "kontrak_vendor_pelangi:1"]
+  expected_substrings: ["USD 185", "185"]
+  locale: id
+  kind: single-doc
+
+- id: id-single-002
+  question: "Berapa lama jangka waktu kontrak antara Acme dan PT Pelangi Konsultindo?"
+  expected_chunks: ["kontrak_vendor_pelangi:0"]
+  expected_substrings: ["6 (enam) bulan", "6 bulan"]
+  locale: id
+  kind: single-doc
+
+- id: id-single-003
+  question: "Bagaimana sengketa antara para pihak akan diselesaikan?"
+  expected_chunks: ["kontrak_vendor_pelangi:1"]
+  expected_substrings: ["BANI", "arbitrase"]
+  locale: id
+  kind: single-doc
+
+- id: id-multihop-001
+  question: "Tarif konsultan Pelangi mengacu pada pasal kebijakan Acme yang mana, dan apa isinya?"
+  expected_chunks: ["kontrak_vendor_pelangi:0", "hr_policy_acme:0"]
+  expected_substrings: ["HR-POL-2026-001", "Pasal 4", "185"]
+  locale: id
+  kind: multi-hop
+
+- id: id-mixed-001
+  question: "Apa rekomendasi memo Q1 terkait kelebihan anggaran konsultan Pelangi?"
+  expected_chunks: ["memo_internal_q1:0", "memo_internal_q1:1"]
+  expected_substrings: ["scope-change", "protokol"]
+  locale: id
+  kind: multi-hop

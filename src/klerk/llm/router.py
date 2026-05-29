@@ -4,15 +4,25 @@ Pi handles its own LLM calls via OpenAI-compat directly. Everything else in
 klerk (proposal pipeline, KG extraction, judges, eval rubric, FAQ builder)
 calls through here so we get one place to add fallbacks, cost tracking, and
 cache wiring.
+
+Cache integration: on every call we check DiskCache (exact match) then
+LanceDB `llm_cache` table (semantic match, cosine > threshold). Hits return
+a synthetic LiteLLM-shaped response so callers don't need to special-case it.
+Misses hit Nemotron via LiteLLM and the response is stored in both layers.
+
+Cache layers can be bypassed for one call with `use_cache=False` (used by
+the smoke verb to force a live round-trip).
 """
 
 from __future__ import annotations
 
 import os
+from dataclasses import dataclass
 from typing import Any
 
 import litellm
 
+from klerk.llm.cache import lookup, store
 from klerk.llm.nemotron import NemotronConfig
 
 
@@ -29,6 +39,36 @@ def _select_model(locale: str) -> tuple[str, str]:
     return cfg.litellm_model, cfg.base_url
 
 
+# ─── Synthetic response for cache hits ───────────────────────────────────────
+@dataclass
+class _SyntheticMessage:
+    content: str
+    role: str = "assistant"
+
+
+@dataclass
+class _SyntheticChoice:
+    message: _SyntheticMessage
+    index: int = 0
+    finish_reason: str = "stop"
+
+
+@dataclass
+class CachedResponse:
+    """Subset of LiteLLM ModelResponse, enough for `.choices[0].message.content`."""
+
+    choices: list[_SyntheticChoice]
+    cached: bool = True
+    cache_layer: str | None = None
+
+    @classmethod
+    def from_text(cls, text: str, *, layer: str) -> CachedResponse:
+        return cls(
+            choices=[_SyntheticChoice(message=_SyntheticMessage(content=text))],
+            cache_layer=layer,
+        )
+
+
 def complete(
     messages: list[dict[str, Any]],
     *,
@@ -38,10 +78,12 @@ def complete(
     response_format: dict[str, Any] | None = None,
     tools: list[dict[str, Any]] | None = None,
     tool_choice: str | dict[str, Any] | None = None,
+    use_cache: bool = True,
 ) -> Any:
-    """Synchronous chat completion through LiteLLM.
+    """Chat completion through LiteLLM, with two-layer cache.
 
-    Returns the LiteLLM response object. Caller pulls `.choices[0].message`.
+    Returns either a LiteLLM ModelResponse or a CachedResponse — both expose
+    `.choices[0].message.content` identically.
     """
     cfg = NemotronConfig.from_env()
     model, base_url = _select_model(locale)
@@ -52,6 +94,7 @@ def complete(
         "api_base": base_url,
         "api_key": cfg.api_key,
         "temperature": temperature,
+        "locale": locale,
     }
     if max_tokens is not None:
         kwargs["max_tokens"] = max_tokens
@@ -62,4 +105,21 @@ def complete(
         if tool_choice is not None:
             kwargs["tool_choice"] = tool_choice
 
-    return litellm.completion(**kwargs)
+    # Cache lookup
+    cache_key: str | None = None
+    if use_cache:
+        cache_key, hit = lookup(messages, **kwargs)
+        if hit is not None:
+            return CachedResponse.from_text(hit.response_text, layer=hit.layer)
+
+    # Live call (locale isn't a LiteLLM kwarg, pop it before passing through)
+    live_kwargs = {k: v for k, v in kwargs.items() if k != "locale"}
+    response = litellm.completion(**live_kwargs)
+
+    if use_cache and cache_key is not None:
+        try:
+            text = response.choices[0].message.content or ""
+            store(cache_key, messages, text)
+        except Exception:  # noqa: BLE001 - cache write never breaks a call
+            pass
+    return response

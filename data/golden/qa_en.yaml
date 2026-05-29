@@ -1,0 +1,40 @@
+# Golden Q&A — English, calibrated to data/seed/.
+# Each entry: id, question, expected_chunks (any-of), expected_substrings (all-of),
+# locale, kind: single-doc | multi-hop | crag-trigger
+#
+# Reviewer expands this file when they drop real docs into data/raw/ + re-index.
+
+- id: en-single-001
+  question: "How many weeks of paid parental leave does Acme offer to full-time employees?"
+  expected_chunks: ["hr_policy_acme:0", "hr_policy_acme:1"]
+  expected_substrings: ["16 weeks"]
+  locale: en
+  kind: single-doc
+
+- id: en-single-002
+  question: "What is Acme's billing rate cap for external advisory consultants?"
+  expected_chunks: ["hr_policy_acme:0", "hr_policy_acme:1"]
+  expected_substrings: ["USD 185", "185"]
+  locale: en
+  kind: single-doc
+
+- id: en-multihop-001
+  question: "Why did Q1 consultant spend overrun by 29% — was it a rate issue or a volume issue?"
+  expected_chunks: ["memo_internal_q1:0", "memo_internal_q1:1", "hr_policy_acme:0"]
+  expected_substrings: ["volume", "scope"]
+  locale: en
+  kind: multi-hop
+
+- id: en-multihop-002
+  question: "What policy clause triggers when the Pelangi engagement runs past 6 months, and where does it appear?"
+  expected_chunks: ["hr_policy_acme:0", "kontrak_vendor_pelangi:0", "memo_internal_q1:1"]
+  expected_substrings: ["fixed-fee", "auto", "transition"]
+  locale: en
+  kind: multi-hop
+
+- id: en-crag-001
+  question: "What's the contingency budget recommendation, and why?"
+  expected_chunks: ["memo_internal_q1:1"]
+  expected_substrings: ["40,000", "parental"]
+  locale: en
+  kind: crag-trigger

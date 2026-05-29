@@ -78,6 +78,11 @@ app.add_typer(faq_app)
 contradict_app.command("scan", help="Run the contradiction sweep, write the report.")(contradict_scan_cmd)
 faq_app.command("build", help="Propose questions per doc + answer them with citations.")(faq_build_cmd)
 
+# eval subcommand
+from klerk.cli.eval_cmd import run_cmd as eval_run_cmd  # noqa: E402
+
+eval_app.command("run", help="Run RAGAS + 5-axis rubric + SEA-HELM-style Bahasa parity.")(eval_run_cmd)
+
 
 # ─── Top-level utility verbs ─────────────────────────────────────────────────
 @app.command()
