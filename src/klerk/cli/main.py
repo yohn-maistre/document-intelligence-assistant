@@ -31,9 +31,7 @@ synth_app = typer.Typer(name="synth", help="Synthetic corpus generation.", no_ar
 index_app = typer.Typer(name="index", help="Build / inspect the retrieval index.", no_args_is_help=True)
 search_app = typer.Typer(name="search", help="Hybrid / vector / BM25 search.", no_args_is_help=True)
 drive_app = typer.Typer(name="drive", help="Google Drive ingestion.", no_args_is_help=True)
-eval_app = typer.Typer(name="eval", help="RAGAS + custom rubric + SEA-HELM eval.", no_args_is_help=True)
-trace_app = typer.Typer(name="trace", help="Phoenix trace inspection.", no_args_is_help=True)
-bg_app = typer.Typer(name="bg", help="Background ingestion agent.", no_args_is_help=True)
+eval_app = typer.Typer(name="eval", help="RAGAS + custom 5-axis rubric.", no_args_is_help=True)
 kg_app = typer.Typer(name="kg", help="Knowledge graph extraction + inspection.", no_args_is_help=True)
 
 app.add_typer(synth_app)
@@ -41,8 +39,6 @@ app.add_typer(index_app)
 app.add_typer(search_app)
 app.add_typer(drive_app)
 app.add_typer(eval_app)
-app.add_typer(trace_app)
-app.add_typer(bg_app)
 app.add_typer(kg_app)
 
 # ── Single-verb commands attached at top level ──
@@ -62,7 +58,7 @@ index_app.command("stats", help="Show current corpus stats.")(index_cmd.show_sta
 # search subcommands
 search_app.command("bm25", help="BM25 search (LanceDB native FTS).")(search_cmd.bm25)
 search_app.command("vector", help="Vector search (BGE-M3 + LanceDB cosine).")(search_cmd.vector)
-search_app.command("hybrid", help="Hybrid: vector + BM25 + RRF + BGE-Reranker.")(search_cmd.hybrid)
+search_app.command("hybrid", help="Hybrid: vector + BM25 + RRF + BGE-M3 ColBERT rerank.")(search_cmd.hybrid)
 
 # kg subcommands
 kg_app.command("extract", help="Build the KG over every indexed chunk.")(kg_cmd.extract)
@@ -81,15 +77,12 @@ faq_app.command("build", help="Propose questions per doc + answer them with cita
 # eval subcommand
 from klerk.cli.eval_cmd import run_cmd as eval_run_cmd  # noqa: E402
 
-eval_app.command("run", help="Run RAGAS + 5-axis rubric + SEA-HELM-style Bahasa parity.")(eval_run_cmd)
+eval_app.command("run", help="Run RAGAS + klerk 5-axis rubric.")(eval_run_cmd)
 
-# ── SHOULD-tier verbs: anomaly, kg viz, bg, trace ─────────────────────────
+# ── SHOULD-tier verbs: anomaly, kg viz ────────────────────────────────────
 from klerk.cli.should_cmds import (  # noqa: E402
     anomaly_scan_cmd,
-    bg_start_cmd,
-    bg_status_cmd,
     kg_viz_cmd,
-    trace_list_cmd,
 )
 
 anomaly_app = typer.Typer(name="anomaly", help="Surface outlier docs that don't fit the corpus.", no_args_is_help=True)
@@ -97,11 +90,6 @@ app.add_typer(anomaly_app)
 anomaly_app.command("scan", help="z-score scan over doc-centroid distances + LLM justifications.")(anomaly_scan_cmd)
 
 kg_app.command("viz", help="Render the KG to interactive HTML (pyvis).")(kg_viz_cmd)
-
-bg_app.command("start", help="Run the background ingestion agent.")(bg_start_cmd)
-bg_app.command("status", help="Show the last cycle's report.")(bg_status_cmd)
-
-trace_app.command("list", help="List recent checkpoint runs.")(trace_list_cmd)
 
 
 # ── studio ──────────────────────────────────────────────────────────────────

@@ -47,9 +47,9 @@ def hybrid(
     query: Annotated[str, typer.Argument(help="Query string.")],
     k: Annotated[int, typer.Option("--k", "-k")] = 8,
     initial: Annotated[int, typer.Option("--initial", help="Candidates before rerank.")] = 16,
-    no_rerank: Annotated[bool, typer.Option("--no-rerank", help="Skip BGE-Reranker step.")] = False,
+    no_rerank: Annotated[bool, typer.Option("--no-rerank", help="Skip ColBERT rerank step.")] = False,
 ) -> None:
-    """Hybrid: vector + BM25 → RRF → BGE-Reranker (cross-encoder)."""
+    """Hybrid: vector + BM25 → RRF → BGE-M3 ColBERT MaxSim rerank."""
     results = search_hybrid(query, k_initial=initial, k_final=k, rerank=not no_rerank)
 
     table = Table(

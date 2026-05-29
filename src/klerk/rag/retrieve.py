@@ -1,4 +1,4 @@
-"""Hybrid retrieval — vector + BM25 → RRF fusion → BGE-Reranker.
+"""Hybrid retrieval — vector + BM25 → RRF fusion → BGE-M3 ColBERT rerank.
 
 Single entry: `search_hybrid(query, k_initial, k_final)`. Returns a list of
 ranked chunks with provenance (which retrievers ranked each chunk where).
@@ -37,10 +37,10 @@ def search_hybrid(
 ) -> list[RetrievedChunk]:
     """Hybrid retrieval.
 
-    1. Vector search (BGE-M3 query embed → LanceDB cosine top-k_initial).
+    1. Vector search (BGE-M3 dense head → LanceDB cosine top-k_initial).
     2. BM25 search (LanceDB native FTS top-k_initial).
     3. RRF fusion (k=60) → take top k_initial fused.
-    4. Optional BGE-Reranker-v2-m3 cross-encoder reorder → top k_final.
+    4. Optional ColBERT-head MaxSim reorder via BGE-M3 → top k_final.
 
     Returns RetrievedChunk objects with per-retriever ranks for trace UI.
     """

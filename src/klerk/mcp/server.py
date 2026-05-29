@@ -43,7 +43,7 @@ def _tools() -> list[Tool]:
     return [
         Tool(
             name="search_hybrid",
-            description="Hybrid retrieval over the indexed corpus: vector + BM25 + RRF + BGE-Reranker. "
+            description="Hybrid retrieval over the indexed corpus: vector + BM25 + RRF + BGE-M3 ColBERT rerank. "
                         "Use this for any 'find me relevant passages' need.",
             inputSchema={
                 "type": "object",

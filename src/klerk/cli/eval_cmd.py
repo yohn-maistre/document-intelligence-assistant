@@ -1,4 +1,9 @@
-"""`klerk eval run` — RAGAS + custom 5-axis rubric + SEA-HELM Bahasa parity."""
+"""`klerk eval run` — RAGAS + klerk's custom 5-axis rubric.
+
+SEA-HELM-style Bahasa parity reporting was demoted in the v5 cleanup pass;
+the brief's 2-Bahasa-Q evaluation is exercised through the standard rubric.
+See `experimental/README.md`.
+"""
 
 from __future__ import annotations
 
@@ -13,7 +18,7 @@ from rich.panel import Panel
 from rich.rule import Rule
 from rich.table import Table
 
-from klerk.eval import ragas_runner, rubric, seahelm_runner
+from klerk.eval import ragas_runner, rubric
 from klerk.eval.golden import load as load_golden
 from klerk.llm.cache import cache_stats
 
@@ -48,7 +53,6 @@ def run_cmd(
     locale: Annotated[str | None, typer.Option("--locale", "-l", help="Restrict to one locale (en | id).")] = None,
     do_ragas: Annotated[bool, typer.Option("--ragas/--no-ragas", help="Run RAGAS baseline.")] = True,
     do_rubric: Annotated[bool, typer.Option("--rubric/--no-rubric", help="Run klerk's custom 5-axis rubric.")] = True,
-    do_seahelm: Annotated[bool, typer.Option("--seahelm/--no-seahelm", help="Run SEA-HELM-style Bahasa parity report.")] = True,
     out_dir: Annotated[Path, typer.Option("--out", help="Where to dump JSON reports.")] = Path("data/output/eval"),
 ) -> None:
     """Run the eval suite. Each metric writes its own JSON file under --out."""
@@ -60,7 +64,7 @@ def run_cmd(
 
     console.print(Panel.fit(
         f"[bold cyan]klerk eval run[/bold cyan]  ·  {len(items)} golden item(s)\n"
-        f"[dim]ragas={do_ragas}  rubric={do_rubric}  seahelm={do_seahelm}  locale={locale or 'all'}[/dim]",
+        f"[dim]ragas={do_ragas}  rubric={do_rubric}  locale={locale or 'all'}[/dim]",
         border_style="cyan",
     ))
 
@@ -76,27 +80,6 @@ def run_cmd(
         path = _write_json(out_dir / "rubric.json", {
             "items": [asdict(r) for r in results],
             "aggregate": agg,
-        })
-        console.print(f"[dim]→ {path}[/dim]\n")
-
-    # ── SEA-HELM-style Bahasa parity ──────────────────────────────────────
-    if do_seahelm:
-        console.print(Rule("[bold]SEA-HELM-style Bahasa parity[/bold]", style="green"))
-        sh = seahelm_runner.run_seahelm()
-        if sh.get("available") and sh.get("id_minus_en_delta"):
-            delta = sh["id_minus_en_delta"]
-            t = Table(title="Δ = Bahasa score − English score", border_style="cyan")
-            t.add_column("axis")
-            t.add_column("delta", justify="right")
-            for axis, d in delta.items():
-                colour = "green" if abs(d) < 0.1 else "yellow" if abs(d) < 0.25 else "red"
-                t.add_row(axis, f"[{colour}]{d:+.2f}[/{colour}]")
-            console.print(t)
-        else:
-            console.print("[yellow]SEA-HELM: insufficient golden items (need both en and id).[/yellow]")
-        path = _write_json(out_dir / "seahelm.json", {
-            "aggregate": sh.get("aggregate", {}),
-            "id_minus_en_delta": sh.get("id_minus_en_delta", {}),
         })
         console.print(f"[dim]→ {path}[/dim]\n")
 

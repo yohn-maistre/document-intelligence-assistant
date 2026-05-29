@@ -1,33 +1,28 @@
-.PHONY: help setup setup-py setup-ts demo eval mcp studio studio-web phoenix bg clean
+.PHONY: help setup demo eval mcp studio studio-web phoenix clean
 
 help:
 	@echo "klerk — Document Intelligence Assistant"
 	@echo ""
-	@echo "  setup          install Python + TS deps (uv sync + pnpm install)"
+	@echo "  setup          install Python deps (uv sync)"
 	@echo "  smoke          h0 smoke-test: LiteLLM → Nemotron + Phoenix launch"
 	@echo "  demo           end-to-end on data/seed: index → kg → ask → propose → contradict → faq → anomaly"
-	@echo "  eval           RAGAS + custom 5-axis rubric + SEA-HELM-style Bahasa parity"
+	@echo "  eval           RAGAS + klerk 5-axis rubric"
 	@echo "  kg             rebuild KG + render kg.html"
 	@echo "  contradict     pairwise contradiction sweep over the KG"
 	@echo "  faq            Corpus Learning Agent → auto-FAQ"
 	@echo "  anomaly        z-score outlier detection + LLM justifications"
-	@echo "  bg             foreground APScheduler watch loop on data/raw/"
-	@echo "  bg-once        one ingestion cycle then exit (CI / cron mode)"
 	@echo "  mcp            klerk-mcp (stdio) — point Claude Desktop / Goose / Cursor at it"
-	@echo "  studio         Textual operator TUI (5 panels)"
-	@echo "  studio-web     STRETCH: browser deploy via textual-web (separate venv)"
+	@echo "  studio         Textual operator TUI"
+	@echo "  studio-web     Browser deploy via textual serve (textual >=0.86)"
 	@echo "  phoenix        open Arize Phoenix UI on local traces"
-	@echo "  local-llm      STRETCH: on-prem Bahasa LLM setup (llama.cpp + Gemma 3 / Qwen 3.5)"
-	@echo "  clean          wipe caches, lancedb, parsed/, output/, checkpoint db"
+	@echo "  clean          wipe caches, lancedb, parsed/, output/"
+	@echo ""
+	@echo "  experimental/  archived TS shell + Pi extension + APScheduler bg + checkpoint db."
+	@echo "                 See experimental/README.md for what lives there and why."
 
-setup: setup-py setup-ts
-	@echo "✓ klerk setup complete"
-
-setup-py:
+setup:
 	uv sync --extra dev
-
-setup-ts:
-	pnpm install
+	@echo "✓ klerk setup complete"
 
 smoke:
 	uv run python -m klerk.cli.main smoke
@@ -55,7 +50,7 @@ demo:
 	@echo "    Then: make studio"
 
 eval:
-	uv run python -m klerk.cli.main eval run --ragas --rubric --seahelm
+	uv run python -m klerk.cli.main eval run --ragas --rubric
 
 mcp:
 	uv run klerk-mcp
@@ -64,16 +59,10 @@ studio:
 	uv run klerk-studio
 
 studio-web:
-	uv run klerk-studio --serve
+	uv run textual serve "src/klerk/studio/app.py:main"
 
 phoenix:
 	uv run python -c "import phoenix as px; px.launch_app()"
-
-bg:
-	uv run klerk bg start
-
-bg-once:
-	uv run klerk bg start --once
 
 kg:
 	uv run klerk kg extract --rebuild
@@ -87,11 +76,6 @@ faq:
 
 anomaly:
 	uv run klerk anomaly scan
-
-local-llm:
-	@echo "Set up an on-prem Bahasa-strong LLM (STRETCH item 26):"
-	@echo "  scripts/setup-local-llm.sh help"
-	@echo "  scripts/setup-local-llm.sh all   # install + download + serve"
 
 clean:
 	rm -rf .lancedb .diskcache .phoenix .gptcache

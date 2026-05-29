@@ -1,11 +1,17 @@
-"""BGE-Reranker-v2-m3 — multilingual cross-encoder for top-k reordering.
+"""Late-interaction reranking via BGE-M3's ColBERT head — no separate model.
 
-Cross-encoder = (query, passage) → score in one forward pass. Slower per pair
-than bi-encoder retrieval but dramatically higher precision for the small
-top-k window that survives initial retrieval.
+BGE-M3 is a 3-headed model (dense + sparse + ColBERT). The dense head powers
+LanceDB vector retrieval; the ColBERT head powers reranking. This module
+reuses the BGE-M3 instance already loaded by `klerk.rag.embed` and computes
+MaxSim scores between query and passage token-level vectors:
+
+    MaxSim(Q, D) = Σ_{q_i ∈ Q} max_{d_j ∈ D} dot(q_i, d_j)
+
+Both Q and D come L2-normalized from BGE-M3, so dot product = cosine.
+Score range: [0, |Q|]. Higher = more relevant.
 
 Backends:
-  - `bge-reranker-v2-m3` (default, ~600MB HF download) — production quality
+  - `bge-m3` (default) — ColBERT-head MaxSim, shares the embed-side load
   - `mock` — Jaccard token overlap; bypasses HF for sandbox/CI use.
     Activated by KLERK_RERANK_BACKEND=mock OR by KLERK_EMBED_BACKEND=mock
     (so a single env-var flips the full pipeline into offline mode).
@@ -16,15 +22,18 @@ from __future__ import annotations
 import os
 import re
 from dataclasses import dataclass
-from functools import lru_cache
 
-MODEL_NAME = "BAAI/bge-reranker-v2-m3"
+import numpy as np
+
+from klerk.rag.embed import embed_with_colbert
+
+MODEL_NAME = "BAAI/bge-m3 (ColBERT head)"
 _WORD_RE = re.compile(r"\w+", re.UNICODE)
 
 
 @dataclass
 class RerankResult:
-    """One passage with its cross-encoder relevance score."""
+    """One passage with its late-interaction relevance score."""
 
     chunk_id: str
     text: str
@@ -39,15 +48,7 @@ def _backend() -> str:
     # Default: track the embed backend — `KLERK_EMBED_BACKEND=mock` implies mock rerank too
     if os.environ.get("KLERK_EMBED_BACKEND") == "mock":
         return "mock"
-    return "bge-reranker-v2-m3"
-
-
-@lru_cache(maxsize=1)
-def _bge_model():
-    from sentence_transformers import CrossEncoder
-
-    device = os.environ.get("KLERK_RERANK_DEVICE", "cpu")
-    return CrossEncoder(MODEL_NAME, device=device)
+    return "bge-m3"
 
 
 def _mock_score(query: str, passage: str) -> float:
@@ -59,6 +60,14 @@ def _mock_score(query: str, passage: str) -> float:
     return len(q & p) / len(q | p)
 
 
+def _maxsim(q_vecs: np.ndarray, p_vecs: np.ndarray) -> float:
+    """ColBERT MaxSim. Inputs are L2-normalized token-level matrices."""
+    if q_vecs.size == 0 or p_vecs.size == 0:
+        return 0.0
+    sims = q_vecs @ p_vecs.T              # (n_q, n_p) cosine-equivalent
+    return float(sims.max(axis=1).sum())  # max over passage tokens, sum over query tokens
+
+
 def rerank(
     query: str,
     passages: list[dict],
@@ -67,14 +76,21 @@ def rerank(
     id_key: str = "chunk_id",
     top_k: int | None = None,
 ) -> list[RerankResult]:
+    """Reorder `passages` by relevance to `query`.
+
+    Same input/output shape as the v4 cross-encoder reranker — the only
+    difference is the scoring backend (BGE-M3 ColBERT MaxSim instead of a
+    separate BGE-Reranker-v2-m3 model load).
+    """
     if not passages:
         return []
 
     if _backend() == "mock":
-        scores = [_mock_score(query, p[text_key]) for p in passages]
+        scores: list[float] = [_mock_score(query, p[text_key]) for p in passages]
     else:
-        pairs = [(query, p[text_key]) for p in passages]
-        scores = _bge_model().predict(pairs, show_progress_bar=False)
+        q_colbert = embed_with_colbert([query])[0]
+        p_colberts = embed_with_colbert([p[text_key] for p in passages])
+        scores = [_maxsim(q_colbert, pv) for pv in p_colberts]
 
     out = [
         RerankResult(
@@ -94,5 +110,7 @@ def rerank(
 def warm() -> str:
     if _backend() == "mock":
         return "mock"
-    _bge_model()
+    from klerk.rag.embed import warm as embed_warm
+
+    embed_warm()
     return MODEL_NAME

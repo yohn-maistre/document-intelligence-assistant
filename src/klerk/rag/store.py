@@ -5,8 +5,8 @@ One table per corpus split:
   - `llm_cache` — semantic prompt→response cache (separate; written by router)
 
 LanceDB's hybrid API exposes vector + BM25 together with a configurable
-reranker. We use it for the initial retrieval pass; downstream BGE-Reranker
-takes over for final precision.
+reranker. We use it for the initial retrieval pass; downstream the BGE-M3
+ColBERT head takes over for late-interaction reordering.
 """
 
 from __future__ import annotations

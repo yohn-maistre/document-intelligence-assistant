@@ -1,9 +1,13 @@
-"""BGE-M3 embedding wrapper — multilingual, Bahasa-strong, self-hosted.
+"""BGE-M3 multi-head wrapper — dense (for retrieval) + ColBERT (for reranking).
 
-Lazy-loads the model on first use; subsequent calls reuse the cached instance.
+BGE-M3 exposes three output heads from a single transformer: dense (1024-d
+sentence vector), sparse (lexical weights), and ColBERT (token-level
+multi-vector). klerk uses the dense head for LanceDB vector search and the
+ColBERT head for late-interaction reranking — both served from one model
+load via FlagEmbedding's `BGEM3FlagModel`.
 
 Backends:
-  - `bge-m3` (default, ~2GB HF download) — production multilingual quality
+  - `bge-m3` (default, ~1.2GB HF download) — production multilingual quality
   - `mock`  (sandbox / CI) — deterministic hash-based pseudo-embeddings;
     bypasses Hugging Face entirely so the retrieval plumbing can be tested
     in environments without HF access. Set `KLERK_EMBED_BACKEND=mock`.
@@ -34,10 +38,12 @@ def _backend() -> str:
 
 @lru_cache(maxsize=1)
 def _bge_model():
-    from sentence_transformers import SentenceTransformer
+    """Singleton BGEM3FlagModel — shared between embed and rerank paths."""
+    from FlagEmbedding import BGEM3FlagModel
 
     device = os.environ.get("KLERK_EMBED_DEVICE", "cpu")
-    return SentenceTransformer(MODEL_NAME, device=device)
+    use_fp16 = device.startswith("cuda")
+    return BGEM3FlagModel(MODEL_NAME, devices=[device], use_fp16=use_fp16)
 
 
 def _mock_vector(text: str) -> np.ndarray:
@@ -60,31 +66,59 @@ def _mock_vector(text: str) -> np.ndarray:
     return vec.astype(np.float32)
 
 
-def embed_passages(texts: list[str], *, batch_size: int = 32) -> np.ndarray:
+def embed_passages(texts: list[str], *, batch_size: int = 12) -> np.ndarray:
+    """Dense embeddings for indexing. Returns (N, 1024) float32, L2-normalized."""
     if not texts:
         return np.zeros((0, EMBED_DIM), dtype=np.float32)
     if _backend() == "mock":
         return np.stack([_mock_vector(t) for t in texts]).astype(np.float32)
-    vectors = _bge_model().encode(
+    out = _bge_model().encode(
         texts,
         batch_size=batch_size,
-        normalize_embeddings=True,
-        convert_to_numpy=True,
-        show_progress_bar=False,
+        max_length=8192,
+        return_dense=True,
+        return_sparse=False,
+        return_colbert_vecs=False,
     )
-    return vectors.astype(np.float32)
+    return np.asarray(out["dense_vecs"], dtype=np.float32)
 
 
 def embed_query(text: str) -> np.ndarray:
+    """Dense embedding for a single query. Returns (1024,) float32, L2-normalized."""
     if _backend() == "mock":
         return _mock_vector(text)
-    vec = _bge_model().encode(
-        text,
-        normalize_embeddings=True,
-        convert_to_numpy=True,
-        show_progress_bar=False,
+    out = _bge_model().encode(
+        [text],
+        max_length=8192,
+        return_dense=True,
+        return_sparse=False,
+        return_colbert_vecs=False,
     )
-    return vec.astype(np.float32)
+    return np.asarray(out["dense_vecs"][0], dtype=np.float32)
+
+
+def embed_with_colbert(texts: list[str], *, batch_size: int = 12) -> list[np.ndarray]:
+    """Token-level ColBERT vectors for late-interaction reranking.
+
+    Returns a list of length N; each element is a (n_tokens, 1024) float32
+    ndarray, L2-normalized along the last axis. Token count varies by input.
+
+    Mock backend returns single-row matrices derived from the mock dense
+    vector so the MaxSim path stays exercisable in CI without weights.
+    """
+    if not texts:
+        return []
+    if _backend() == "mock":
+        return [_mock_vector(t).reshape(1, EMBED_DIM) for t in texts]
+    out = _bge_model().encode(
+        texts,
+        batch_size=batch_size,
+        max_length=8192,
+        return_dense=False,
+        return_sparse=False,
+        return_colbert_vecs=True,
+    )
+    return [np.asarray(v, dtype=np.float32) for v in out["colbert_vecs"]]
 
 
 def warm() -> str:
