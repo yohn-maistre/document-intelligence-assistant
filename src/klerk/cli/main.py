@@ -1,0 +1,179 @@
+"""klerk Typer CLI — primary brand surface.
+
+Verbs are opinionated, output is structured (Rich tables for humans, --json for
+agents). The chat REPL is one entry point; the verbs are the headline.
+"""
+
+from __future__ import annotations
+
+import os
+from typing import Annotated
+
+import typer
+from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table
+
+from klerk import __version__
+
+app = typer.Typer(
+    name="klerk",
+    help="Document Intelligence Assistant — multi-agent RAG over your documents.",
+    no_args_is_help=True,
+    add_completion=False,
+    rich_markup_mode="rich",
+)
+console = Console()
+
+
+# ─── Stub subcommand groups (filled in over h1-h22) ──────────────────────────
+synth_app = typer.Typer(name="synth", help="Synthetic corpus generation.", no_args_is_help=True)
+index_app = typer.Typer(name="index", help="Build / inspect the retrieval index.", no_args_is_help=True)
+search_app = typer.Typer(name="search", help="Hybrid / vector / BM25 search.", no_args_is_help=True)
+drive_app = typer.Typer(name="drive", help="Google Drive ingestion.", no_args_is_help=True)
+eval_app = typer.Typer(name="eval", help="RAGAS + custom rubric + SEA-HELM eval.", no_args_is_help=True)
+trace_app = typer.Typer(name="trace", help="Phoenix trace inspection.", no_args_is_help=True)
+bg_app = typer.Typer(name="bg", help="Background ingestion agent.", no_args_is_help=True)
+
+app.add_typer(synth_app)
+app.add_typer(index_app)
+app.add_typer(search_app)
+app.add_typer(drive_app)
+app.add_typer(eval_app)
+app.add_typer(trace_app)
+app.add_typer(bg_app)
+
+
+# ─── Top-level utility verbs ─────────────────────────────────────────────────
+@app.command()
+def version() -> None:
+    """Print klerk version."""
+    console.print(f"klerk {__version__}")
+
+
+@app.command()
+def smoke() -> None:
+    """h0 smoke-test: LiteLLM → Nemotron round-trip + Phoenix launch.
+
+    Verifies the gateway is reachable and the observability stack boots.
+    Safe to run repeatedly; emits cache hits on subsequent runs once caching
+    is wired in h16.5.
+    """
+    from klerk.llm.nemotron import NemotronConfig
+    from klerk.llm.router import complete
+
+    console.print(
+        Panel.fit(
+            "[bold cyan]klerk smoke-test[/bold cyan]\n"
+            "Verifying gateway → Nemotron round-trip and Phoenix boot.",
+            border_style="cyan",
+        )
+    )
+
+    # ── 1. Config check ──
+    cfg = NemotronConfig.from_env()
+    table = Table(title="Config", show_header=False, border_style="dim")
+    table.add_column("key", style="dim")
+    table.add_column("value")
+    table.add_row("base_url", cfg.base_url)
+    table.add_row("model", cfg.model)
+    table.add_row("api_key", "***set***" if cfg.api_key else "[red](not set — export NVIDIA_API_KEY)[/red]")
+    console.print(table)
+
+    if not cfg.api_key:
+        console.print(
+            "\n[yellow]NVIDIA_API_KEY not set; skipping live LLM round-trip. "
+            "Copy .env.example to .env and fill in the key to enable.[/yellow]"
+        )
+        _phoenix_section()
+        raise typer.Exit(code=0)
+
+    # ── 2. Live LLM round-trip ──
+    console.print("\n[dim]Calling Nemotron via LiteLLM...[/dim]")
+    try:
+        response = complete(
+            messages=[
+                {"role": "system", "content": "You answer in one short sentence."},
+                {"role": "user", "content": "Say 'klerk is online.' and nothing else."},
+            ],
+            max_tokens=32,
+        )
+        reply = response.choices[0].message.content
+        console.print(Panel(reply, title="Nemotron reply", border_style="green"))
+    except Exception as e:  # noqa: BLE001
+        console.print(Panel(f"[red]{type(e).__name__}: {e}[/red]", title="LiteLLM error", border_style="red"))
+        raise typer.Exit(code=1) from e
+
+    _phoenix_section()
+
+
+def _phoenix_section() -> None:
+    """Boot Phoenix and show the URL, but don't block the smoke verb."""
+    console.print("\n[dim]Booting Arize Phoenix...[/dim]")
+    try:
+        from klerk.obs.phoenix import instrument_litellm, launch
+
+        instrument_litellm()
+        url = launch()
+        console.print(Panel(url, title="Phoenix UI", border_style="green"))
+        console.print("[dim]Phoenix is running in-process; it stops when this CLI exits.[/dim]")
+    except Exception as e:  # noqa: BLE001
+        console.print(
+            Panel(
+                f"[yellow]{type(e).__name__}: {e}[/yellow]\n"
+                "Phoenix init failed — non-fatal for the smoke verb.",
+                title="Phoenix warning",
+                border_style="yellow",
+            )
+        )
+
+
+# ─── Chat passthrough (h19.5–22 wires this to klerk-cli/Pi) ─────────────────
+@app.command()
+def chat(
+    locale: Annotated[str, typer.Option("--locale", "-l", help="en | id")] = "en",
+) -> None:
+    """Open the klerk chat REPL (delegates to klerk-cli; Pi runs hidden).
+
+    Until h19.5, this prints a placeholder.
+    """
+    _ = locale
+    console.print(
+        Panel.fit(
+            "[bold]klerk chat[/bold] is wired in h19.5–22.\n"
+            "Until then, use the verbs: [cyan]klerk ask[/cyan] / [cyan]klerk propose[/cyan].",
+            border_style="dim",
+        )
+    )
+
+
+# ─── Placeholder verbs filled in over the build ──────────────────────────────
+@app.command()
+def ask(
+    question: Annotated[str, typer.Argument(help="Question to answer over the corpus.")],
+    locale: Annotated[str, typer.Option("--locale", "-l")] = "en",
+) -> None:
+    """Q&A over the corpus (h7.5–9.5)."""
+    _ = question, locale
+    console.print("[dim]ask: implemented in h7.5–9.5[/dim]")
+
+
+@app.command()
+def propose(
+    topic: Annotated[str, typer.Argument(help="Proposal topic.")],
+    sections: Annotated[int, typer.Option("--sections", "-n")] = 3,
+    locale: Annotated[str, typer.Option("--locale", "-l")] = "en",
+) -> None:
+    """Adversarial proposal pipeline (h11–14.5)."""
+    _ = topic, sections, locale
+    console.print("[dim]propose: implemented in h11–14.5[/dim]")
+
+
+def main() -> None:
+    """Entry point exposed via [project.scripts] klerk = ..."""
+    os.environ.setdefault("LITELLM_LOG", "WARNING")
+    app()
+
+
+if __name__ == "__main__":
+    main()
