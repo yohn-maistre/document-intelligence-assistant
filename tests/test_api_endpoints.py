@@ -126,10 +126,28 @@ def test_actions_extract_validates_one_of(client):
     assert r.status_code == 422  # neither doc_id nor text
 
 
-def test_actions_extract_returns_501_for_now(client):
-    r = client.post("/actions/extract", json={"text": "Yan should review the report by Friday."})
-    assert r.status_code == 501
-    assert "step 7" in r.json()["detail"]
+def test_actions_extract_accepts_text_input(client, monkeypatch):
+    """Step 7 wired the agent; without LLM creds it propagates as a runtime error."""
+    from klerk.agent._models import ActionExtraction, ActionItem
+    from klerk.agent import action_items
+
+    monkeypatch.setattr(
+        action_items,
+        "ask_json",
+        lambda *a, **kw: ActionExtraction(
+            items=[ActionItem(assignee="Yan", action="Review report", due="Friday")],
+            source="text",
+        ),
+    )
+    r = client.post(
+        "/actions/extract",
+        json={"text": "Yan should review the report by Friday."},
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["n_items"] == 1
+    assert body["items"][0]["assignee"] == "Yan"
+    assert body["source"] == "text"
 
 
 # ─── /draft ──────────────────────────────────────────────────────────────────
@@ -169,10 +187,13 @@ def test_drift_recent_reads_jsonl(client, tmp_path):
     assert body["events"][0]["doc_id"] == "hr_policy_2025"
 
 
-def test_drift_scan_returns_501(client):
+def test_drift_scan_returns_202_with_run_id(client):
+    """Step 7 wired the agent; /drift/scan now fires a background scan."""
     r = client.post("/drift/scan")
-    assert r.status_code == 501
-    assert "step 7" in r.json()["detail"]
+    assert r.status_code == 202
+    body = r.json()
+    assert body["status"] == "queued"
+    assert body["run_id"].startswith("drf_")
 
 
 # ─── OpenAPI surface ─────────────────────────────────────────────────────────

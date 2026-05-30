@@ -261,6 +261,26 @@ async def _chat_event_stream(
         "event": "citations",
         "data": json.dumps({"citations": citations, "confidence": confidence}),
     }
+
+    # Low-confidence escalation hook: draft an email to a human owner so the
+    # caller doesn't have to figure out who to ask. Failures are silent so
+    # the chat stream is never broken by escalation logic.
+    escalation_threshold = float(os.environ.get("KLERK_ESCALATION_THRESHOLD", "0.3"))
+    if confidence < escalation_threshold:
+        try:
+            from klerk.agent.escalation import draft as escalation_draft
+
+            draft = await asyncio.to_thread(
+                escalation_draft,
+                question=req.query,
+                confidence=confidence,
+                retrieved_excerpt=context[:1200] if hits else "",
+                locale=req.locale,
+            )
+            yield {"event": "escalation", "data": draft.model_dump_json()}
+        except Exception:  # noqa: BLE001
+            pass
+
     total_ms = (time.perf_counter() - start) * 1000
     yield {
         "event": "done",
@@ -393,6 +413,10 @@ def _wire_conflicts(app: FastAPI) -> None:
 def _wire_draft(app: FastAPI) -> None:
     @app.post("/draft", response_model=DraftResponse, tags=["agents"])
     async def draft(req: DraftRequest):
+        # Route through the writer façade (step 7) so the internal Proposal
+        # type doesn't leak into the API layer. The full per-section trace
+        # (drafter-A / drafter-B / adjudication) is still reachable via the
+        # internal proposal_pipeline.propose() if needed.
         from klerk.agent.proposal_pipeline import propose
 
         proposal = await asyncio.to_thread(
@@ -422,23 +446,33 @@ def _wire_draft(app: FastAPI) -> None:
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# /actions/extract — stub in step 2; full agent in step 7 (Option B)
+# /actions/extract — capability B (action_items.extract)
 # ═══════════════════════════════════════════════════════════════════════════
 def _wire_actions(app: FastAPI) -> None:
     @app.post(
         "/actions/extract",
         response_model=ActionExtractResponse,
-        responses={501: {"description": "Pending step 7."}},
         tags=["agents"],
     )
-    async def actions_extract(_req: ActionExtractRequest):
-        raise HTTPException(
-            status_code=501,
-            detail=(
-                "Action-item extraction is scaffolded in step 2; the full agent "
-                "(Pydantic-typed extraction with assignee/due/source_chunk grounding) "
-                "lands in step 7 (capability B). See HANDOFF.md."
-            ),
+    async def actions_extract(req: ActionExtractRequest, locale: str = Query(default="en", pattern="^(en|id)$")):
+        from klerk.agent.action_items import extract
+        from klerk.api.models import ActionItem as ActionItemPublic
+
+        result = await asyncio.to_thread(
+            extract, doc_id=req.doc_id, text=req.text, locale=locale,
+        )
+        return ActionExtractResponse(
+            items=[
+                ActionItemPublic(
+                    assignee=item.assignee,
+                    action=item.action,
+                    due=item.due,
+                    source_chunk=item.source_chunk,
+                )
+                for item in result.items
+            ],
+            n_items=len(result.items),
+            source=result.source,
         )
 
 
@@ -476,19 +510,26 @@ def _wire_drift(app: FastAPI) -> None:
         "/drift/scan",
         response_model=DriftScanResponse,
         status_code=202,
-        responses={501: {"description": "Pending step 7."}},
         tags=["agents"],
     )
-    async def drift_scan():
-        raise HTTPException(
-            status_code=501,
-            detail=(
-                "Drift scan is scaffolded in step 2; the full scheduled agent "
-                "(corpus-version diff + APScheduler nightly run) lands in step 7 "
-                "(capability E). /drift/recent already reads the jsonl that the "
-                "scheduled agent will write."
-            ),
-        )
+    async def drift_scan(bg: BackgroundTasks):
+        from klerk.agent.drift import scan as run_drift_scan
+
+        run_id = f"drf_{uuid.uuid4().hex[:10]}"
+        # Fire-and-forget the actual scan; results land in
+        # .klerk/drift-events.jsonl which /drift/recent reads.
+        def _run_and_log():
+            report = run_drift_scan()
+            # Best-effort: stamp the report's own run_id into a status file
+            try:
+                status_path = _state_dir() / "drift-runs" / f"{run_id}.json"
+                status_path.parent.mkdir(parents=True, exist_ok=True)
+                status_path.write_text(report.model_dump_json(indent=2))
+            except OSError:
+                pass
+
+        bg.add_task(_run_and_log)
+        return DriftScanResponse(run_id=run_id, status="queued", accepted_at=_now())
 
 
 # ─── Module-level app for `uvicorn klerk.api.server:app` ─────────────────────
