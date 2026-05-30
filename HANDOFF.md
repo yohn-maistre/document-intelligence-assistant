@@ -435,4 +435,202 @@ bash /tmp/nemotron-package/nemotron-user-package/test-nemotron.sh
 
 ---
 
-*End of handoff. If you're a new session starting here: read sections 1-3 first, then 7 (next steps). Sections 4-6 are deep context. Sections 8-11 are reference.*
+## 12. v6 plan — agentic orchestrator + Stack C lock-in (2026-05-30)
+
+v5 shipped (steps 1-11). Branch `claude/agent-framework-planning-jJqQj`
+at `29fc6b8`. Working tree clean. 143 tests green. v6 is additive on top.
+
+### 12.1 Mission
+
+Promote `/chat` from a single-shot RAG endpoint to a multi-turn LangGraph
+orchestrator that routes among six tools. Surface the agent's reasoning
+in a Live Chat panel + Activity panel inside Studio. Ship a constrained-env
+demo path (remote embeddings + browser-served lite TUI). Promote Pi from
+`experimental/` as a second polished CLI surface.
+
+### 12.2 Stack decision — locked
+
+**Stack C**: Python-only orchestrator (LangGraph + PydanticAI) for the
+FastAPI submission path; Pi 0.78+ promoted from `experimental/` as a
+second CLI surface (`klerk-cli` on npm) for developers who prefer
+terminal-native chat.
+
+**Three stacks considered**:
+
+| Stack | Orchestrator | Cost | Verdict |
+|---|---|---|---|
+| A | Pi (Node sidecar) + LangGraph for sub-pipelines | Node runtime in Docker; JSONL bridge; 4-process hop per tool call; ~12h | Rejected — Node tax on the primary path |
+| B | LangGraph in Python only | ~6h; Python-end-to-end | Rejected on its own — Pi work already exists, throwing it away wastes the investment |
+| **C** | **LangGraph in Python + Pi as 2nd CLI surface** | **~22h; two surfaces, both native to their env** | **Locked** |
+
+Researched alternatives that did NOT change the decision:
+
+- **Pi (`@mariozechner/pi-coding-agent`)** — confirmed via SDK
+  inspection: has `createAgentSession()`, built-in compaction +
+  multi-session JSONL + branching/forking + 25+ provider support; ships
+  in 4 modes (TUI / print-JSON / RPC / SDK). Explicitly rejects MCP
+  ("No MCP" design stance, [Mario's blog](https://mariozechner.at/posts/2025-11-02-what-if-you-dont-need-mcp/)).
+  Currently rebranded to `@earendil-works/*` — we migrate.
+- **Flue (`@flue/runtime` by Fred K. Schott)** — confirmed real,
+  v0.8.1 Apache-2.0, built on `@earendil-works/pi-agent-core`.
+  Headless TS framework with Cloudflare DO sessions. **Does not solve
+  the Python-Node bridge** — pure Node/Cloudflare, no Python client.
+  Pre-1.0 + headless = doesn't fit the polished-CLI-chat goal as well
+  as Pi. Open option for v7 if 2nd-surface use case shifts to
+  "deployable HTTP agent app".
+
+### 12.3 Architecture target
+
+```
+                         ┌─────────────────────────────────────┐
+                         │  LangGraph Chat Orchestrator        │
+   Studio TUI            │  create_react_agent + state graph   │
+   (Textual, Python)─────│  sliding-window compaction          │
+   HTTP/SSE              │  6 tools dispatched as graph nodes  │
+                         └────────┬────────────────────────────┘
+                                  │
+       ┌──────────────────────────┼─────────────────────────────┐
+       ▼                          ▼                             ▼
+  search_hybrid             draft_doc                    scan_conflicts
+  (LiteLLM + LanceDB)       (LangGraph sub-graph,        (LangGraph,
+                             7-stage adversarial)         existing, 4-node)
+       ▼                          ▼                             ▼
+  extract_actions           ingest_path                   sync_drive
+  (PydanticAI)              (ingest_runner)               (drive/sync.py)
+
+  Background  ─── drift_runner (APScheduler, separate process)
+
+                            ─── ─── ─── ───
+
+  Second CLI surface (promoted from experimental/):
+
+  klerk-cli (npm, TS)
+  ──────────────────
+  Pi 0.78+ SDK ─── pi-extension-klerk (native TS tools, NO MCP)
+                              │
+                              ▼
+                  HTTP → FastAPI internal tool endpoints
+                  (same Python functions the orchestrator routes)
+```
+
+**SSE event stream** (downward-compatible with v5; new types are
+`tool_call`, `tool_result`, `session`):
+
+```
+data: {"event": "session",     "session_id": "..."}        # NEW first frame
+data: {"event": "tool_call",   "name": "search_hybrid", "args": {...}}
+data: {"event": "tool_result", "name": "search_hybrid", "summary": "12 chunks"}
+data: {"event": "token",       "text": "..."}              # unchanged
+data: {"event": "citations",   "citations": [...]}         # unchanged
+data: {"event": "done",        "ttft_ms": ..., ...}        # unchanged
+```
+
+### 12.4 Locked scoping decisions
+
+1. **LangGraph orchestrator** — `create_react_agent`; MAX_TOOL_HOPS=4.
+2. **Multi-turn memory** — server-side `SessionStore` (JSONL per session)
+   + sliding-window compaction (last 3 turns verbatim; older summarised
+   to ≤200 tokens via Nemotron). Token budget 16K.
+3. **doc_writer rename** — `proposal_pipeline.py` → `doc_writer.py`;
+   CLI verb `klerk propose` → `klerk write`; skill manifest + MCP tool
+   name + README all updated.
+4. **doc_writer as LangGraph sub-graph** — 7 stages become explicit
+   nodes; checkpoints under `.klerk/checkpoints.db`.
+5. **PydanticAI migration** — `action_items.py`, `kg_extract.py`, and
+   `contradiction.judge_pair()` migrate from raw-LiteLLM JSON-schema to
+   `Agent(result_type=PydanticModel)`. Closes the v5 docs/reality gap
+   (pydantic-ai was in deps but `grep "pydantic_ai"` returned 0 hits).
+6. **Pi as 2nd surface** — `experimental/ts-shell/` graduates to
+   top-level `cli/`; `pi-extension-klerk` rewritten on Pi's native
+   `defineTool()` typebox API (no MCP); both packages migrate to
+   `@earendil-works/*` latest.
+7. **Lite TUI right rail = five widgets**: SessionPanel, CorpusStat,
+   Activity (tool calls), RecentTraces (chat exchanges), EvalHeader.
+8. **Drive upload includes `--dry-run`**.
+9. **Remote embed backend** = provider-neutral via env-var
+   (`KLERK_EMBED_REMOTE_URL` + `KLERK_EMBED_REMOTE_KEY` +
+   `KLERK_EMBED_REMOTE_MODEL`); `.env.example` lists DeepInfra / Jina /
+   OpenRouter as known-compatible.
+10. **No remote reranker** — remote mode = RRF-only; ColBERT MaxSim
+    raises `RuntimeError`; rerank module catches + falls back to RRF.
+
+### 12.5 Implementation order (~22h, 8 clusters)
+
+| # | Cluster | Time |
+|---|---|---|
+| 1 | Backend foundations: remote embed + rerank fallback + Drive upload (`--dry-run`) | ~3h |
+| 2 | doc_writer rename + LangGraph sub-graph refactor | ~2h |
+| 3 | PydanticAI migration: action_items, kg_extract, contradiction.judge_pair | ~1.5h |
+| 4 | Multi-turn chat: SessionStore + sliding-window + LangGraph orchestrator + 6 tools + `/chat` rewire | ~5h |
+| 5 | Studio TUI: LiveChatPanel + ActivityBlock + SessionPanel + Lite layout + `--serve` unstub | ~4h |
+| 6 | Pi 2nd surface: pi-extension on native tools + `@earendil-works/*` migration + `experimental/ts-shell/` → `cli/` promotion + publish prep (don't publish yet) | ~3h |
+| 7 | Demo + docs: `make demo-lite` + README sweep + `DATA_GENERATION.md` §10 + `.env.example` | ~2.5h |
+| 8 | Commits (6 atomic) + merge to main | ~30min |
+
+### 12.6 File touch summary
+
+20 source files, 5 new test files. Net add ~1900 LOC; ~370 LOC new tests.
+
+New: `src/klerk/api/session.py`, `src/klerk/agent/orchestrator.py`,
+`src/klerk/agent/tools.py`, `src/klerk/agent/doc_writer_graph.py`,
+`src/klerk/studio/widgets/{live_chat,activity,sessions}.py`,
+`tests/test_{embed_remote,session_store,orchestrator}.py`.
+
+Renamed: `proposal_pipeline.py` → `doc_writer.py` (+ test file + skill
+YAML + CLI verb + MCP tool name).
+
+Moved: `experimental/ts-shell/` → `cli/` (top-level).
+
+Substantially modified: `src/klerk/rag/{embed,rerank}.py`,
+`src/klerk/drive/sync.py`, `src/klerk/cli/{main,drive_cmd}.py`,
+`src/klerk/api/{server,models}.py`, `src/klerk/studio/app.py`,
+`src/klerk/agent/{action_items,kg_extract,contradiction,prompts/system}.py`,
+`experimental/pi-extension/src/`.
+
+### 12.7 Explicitly out of scope (v7+)
+
+- PydanticAI for the orchestrator (staying LangGraph in v6).
+- Pi as the primary orchestrator (Stack A) — Node sidecar tax.
+- Flue as a chat surface — pre-1.0, headless, doesn't solve Python bridge.
+- Remote ColBERT-aware rerank (Jina multi-vector + local MaxSim).
+- Quantised BGE-M3 (INT8 ONNX) as a third backend tier.
+- Drift as a routable tool (it's a background loop).
+- Self-hosted Modal / Vespa templates.
+- OAuth alternative to Drive Service Account.
+- `/conflicts/scan?resume=run_id` resumption surface.
+- Publishing `klerk-cli` to npm (publish-ready locally; defer to
+  post-submission).
+
+### 12.8 Risks specific to v6
+
+| Risk | Likelihood | Mitigation |
+|---|---|---|
+| Nemotron tool-routing unreliable (LangGraph picks wrong tool) | Medium | Pre-seed `search_hybrid` every turn; explicit tool-selection prompt; fallback path keeps system useful |
+| LangGraph + LiteLLM tool-call shape mismatch | Low-Medium | LangGraph 0.2+ supports OpenAI-format tool calls; LiteLLM translates Nemotron tool-call format |
+| Pi 0.73 → 0.78 + `@earendil-works/*` rebrand API drift | Medium | Verify `dist/index.d.ts` matches integration; pin exact 0.78.x; rebrand still in flight |
+| PydanticAI ⇄ Nemotron-via-OpenAI-proxy edge cases | Low | `OpenAIModel` accepts custom `base_url` + `http_client` headers; standard pattern |
+| LiveChatPanel SSE backpressure under slow Nemotron | Low | Textual reactive widgets handle async; no event-loop blocking |
+| Drive upload targets wrong folder | Low (mitigated) | `--dry-run` printed first; `--to` mandatory; `drive.file` scope limits blast radius |
+| Sliding-window summary cost (extra Nemotron call per overflow) | Low | Cached by `(session_id, last_summarised_turn)`; summary ≤200 tokens |
+
+### 12.9 Resume commands for next session
+
+```bash
+git checkout claude/agent-framework-planning-jJqQj
+git pull --ff-only origin claude/agent-framework-planning-jJqQj
+uv sync                              # Python deps
+pnpm install                         # TS deps for cli/ + experimental/pi-extension/
+cp .env.example .env                 # if not already done
+# verify Nemotron proxy still healthy
+bash /tmp/nemotron-package/nemotron-user-package/test-nemotron.sh
+# verify Pi rebrand pinned correctly
+pnpm ls --depth 0 | grep earendil
+# start at cluster 1, step 1.1 (remote embed backend)
+```
+
+The full work breakdown lives in `.planning/v6-plan.md` (local-only;
+`.planning/` is gitignored).
+
+---
+
+*End of handoff. If you're a new session starting here: read sections 1-3 first, then 12 (v6 plan). Sections 4-6 are deep context. Sections 7-11 are v5 reference. Section 12 is the active workplan.*
