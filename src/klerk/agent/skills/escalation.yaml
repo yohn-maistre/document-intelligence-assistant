@@ -1,0 +1,73 @@
+# agentskills.io manifest — capability A
+# Drafts a routing email when the chat surface can't answer with confidence.
+
+apiVersion: skills.dev/v1
+kind: Skill
+metadata:
+  name: klerk.escalation_drafter
+  version: 1.0.0
+  vendor: klerk
+  homepage: https://github.com/yohn-maistre/document-intelligence-assistant
+  license: MIT
+
+spec:
+  description: |
+    Drafts a structured escalation email (to, cc, subject, body, urgency)
+    when klerk's retrieval pipeline returns an ungrounded answer or low
+    confidence. Routes the request to the right human owner (HR / Security /
+    Engineering / Finance) using built-in heuristics.
+
+  inputs:
+    - name: question
+      type: string
+      description: The user's verbatim question.
+      required: true
+    - name: confidence
+      type: number
+      description: Observed retrieval confidence in [0, 1].
+      required: true
+    - name: retrieved_excerpt
+      type: string
+      description: Any partial context klerk did surface (may be empty).
+      required: false
+    - name: locale
+      type: string
+      enum: ["en", "id"]
+      default: "en"
+
+  outputs:
+    schema: EscalationDraft   # see src/klerk/agent/_models.py
+    fields:
+      - to
+      - cc
+      - subject
+      - body
+      - urgency
+      - rationale
+      - source_question
+      - confidence_observed
+
+  triggers:
+    - when: confidence_below
+      threshold: 0.3
+      source: /chat post-retrieval judge
+
+  runtime:
+    python:
+      module: klerk.agent.escalation
+      callable: draft
+
+  observability:
+    traces:
+      - phoenix:
+          span_name: klerk.skill.escalation_drafter
+    metrics:
+      - escalations_emitted
+      - drafts_with_urgency_high
+
+  llm:
+    provider: nemotron
+    model: nemotron-3-nano-omni
+    note: |
+      Same model that answered the chat. No separate judge model — the
+      brief mandates Nemotron-only.

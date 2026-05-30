@@ -1,0 +1,79 @@
+# agentskills.io manifest — capability C
+# Cross-document contradiction sweep via the LangGraph spine.
+
+apiVersion: skills.dev/v1
+kind: Skill
+metadata:
+  name: klerk.conflict_reporter
+  version: 1.0.0
+  vendor: klerk
+  homepage: https://github.com/yohn-maistre/document-intelligence-assistant
+  license: MIT
+
+spec:
+  description: |
+    Sweeps the corpus for contradicting claims across docs. The pipeline is
+    a 4-node LangGraph StateGraph: retrieve_docs → pair_facts →
+    judge_conflict → format_report. Each node is independently
+    instrumentable and the StateGraph carries a checkpointer hook for
+    resumability of long scans.
+
+  inputs:
+    - name: locale
+      type: string
+      enum: ["en", "id"]
+      default: "en"
+
+  outputs:
+    schema: ConflictReport
+    fields:
+      - findings[]:
+          - entity_or_relation
+          - consistent
+          - contradiction
+          - chunks
+      - n_findings
+      - generated_at
+
+  triggers:
+    - on_endpoint: POST /conflicts/scan
+    - on_drift_event: doc_changed
+      note: |
+        Optional — wire to the drift agent so any modified doc triggers a
+        targeted re-scan of conflicts that mention it.
+
+  runtime:
+    python:
+      module: klerk.orchestrate.conflict_graph
+      callable: run
+
+  orchestration:
+    framework: langgraph
+    graph:
+      nodes:
+        - retrieve_docs
+        - pair_facts
+        - judge_conflict
+        - format_report
+      edges:
+        - [retrieve_docs, pair_facts]
+        - [pair_facts, judge_conflict]
+        - [judge_conflict, format_report]
+        - [format_report, END]
+    checkpointer:
+      kind: sqlite
+      path: ${KLERK_STATE_DIR}/langgraph-state.db
+
+  observability:
+    traces:
+      - phoenix:
+          span_names:
+            - klerk.skill.conflict_reporter.retrieve_docs
+            - klerk.skill.conflict_reporter.pair_facts
+            - klerk.skill.conflict_reporter.judge_conflict
+            - klerk.skill.conflict_reporter.format_report
+
+  llm:
+    provider: nemotron
+    model: nemotron-3-nano-omni
+    note: judge_conflict is the only LLM-bound node.

@@ -1,0 +1,65 @@
+# agentskills.io manifest — capability E
+# Scheduled drift detection over the corpus.
+
+apiVersion: skills.dev/v1
+kind: Skill
+metadata:
+  name: klerk.drift_detector
+  version: 1.0.0
+  vendor: klerk
+  homepage: https://github.com/yohn-maistre/document-intelligence-assistant
+  license: MIT
+
+spec:
+  description: |
+    Diffs the current LanceDB corpus against a persisted snapshot and
+    emits structured events: doc_added / doc_changed / doc_removed /
+    scope_drift / tone_drift. Snapshot is sha256 of chunk texts plus
+    the dense centroid; scope_drift fires when the centroid moves more
+    than KLERK_DRIFT_THRESHOLD cosine distance.
+
+  inputs: []   # no user inputs — operates on the live corpus
+
+  outputs:
+    schema: DriftScanReport
+    fields:
+      - run_id
+      - started_at
+      - completed_at
+      - n_docs_scanned
+      - events[]:
+          - type           # doc_added / doc_changed / doc_removed / scope_drift / tone_drift
+          - doc_id
+          - timestamp
+          - summary
+          - before_excerpt
+          - after_excerpt
+
+  triggers:
+    - on_endpoint: GET /drift/recent      # read last-N events from jsonl
+    - on_endpoint: POST /drift/scan       # fire-and-forget background scan
+    - schedule:
+        cron: "0 2 * * *"                  # daily 02:00 UTC
+        runtime: apscheduler
+        entrypoint: klerk.scheduled.drift_runner
+
+  runtime:
+    python:
+      module: klerk.agent.drift
+      callable: scan
+
+  storage:
+    events_jsonl: ${KLERK_STATE_DIR}/drift-events.jsonl
+    snapshot_json: ${KLERK_STATE_DIR}/drift-snapshot.json
+    per_run_status_dir: ${KLERK_STATE_DIR}/drift-runs/
+
+  observability:
+    traces:
+      - phoenix:
+          span_name: klerk.skill.drift_detector
+
+  llm:
+    note: |
+      No LLM calls in the default path. Heuristics are deterministic
+      (sha256 + centroid cosine). tone_drift would optionally add a
+      Nemotron classifier; deferred until the brief asks for it.

@@ -388,21 +388,25 @@ def _wire_sync(app: FastAPI) -> None:
 def _wire_conflicts(app: FastAPI) -> None:
     @app.post("/conflicts/scan", response_model=ConflictReport, tags=["agents"])
     async def conflicts_scan(locale: str = Query(default="en", pattern="^(en|id)$")):
-        from klerk.agent.contradiction import scan as run_scan
+        # Step 8: route through the LangGraph spine instead of calling
+        # contradiction.scan directly. The 4-node graph (retrieve_docs →
+        # pair_facts → judge_conflict → format_report) gives us
+        # per-node tracing and a clean place to add checkpointing.
+        from klerk.orchestrate.conflict_graph import run as run_graph
 
-        results = await asyncio.to_thread(run_scan, locale=locale)
+        state = await asyncio.to_thread(run_graph, locale)
         findings = [
             ConflictFinding(
-                entity_or_relation=verdict.entity_or_relation,
-                consistent=verdict.consistent,
-                contradiction=verdict.contradiction or None,
-                chunks=grp.evidence_chunks,
+                entity_or_relation=f["entity_or_relation"],
+                consistent=f["consistent"],
+                contradiction=f.get("contradiction") or None,
+                chunks=f["evidence_chunks"],
             )
-            for grp, verdict in results
+            for f in state.get("findings", [])
         ]
         return ConflictReport(
             findings=findings,
-            n_findings=len(findings),
+            n_findings=state.get("n_findings", len(findings)),
             generated_at=_now(),
         )
 

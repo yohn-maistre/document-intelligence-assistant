@@ -1,0 +1,76 @@
+# agentskills.io manifest — capability D
+# Multi-drafter adversarial proposal writer.
+
+apiVersion: skills.dev/v1
+kind: Skill
+metadata:
+  name: klerk.writer
+  version: 1.0.0
+  vendor: klerk
+  homepage: https://github.com/yohn-maistre/document-intelligence-assistant
+  license: MIT
+
+spec:
+  description: |
+    Generates a multi-section proposal with adversarial A/B drafting:
+    Drafter-A and Drafter-B write competing drafts against the same
+    retrieved evidence; the Adjudicator picks the stronger one; the
+    Critic scores the winner against klerk's custom 5-axis rubric.
+
+  inputs:
+    - name: topic
+      type: string
+      required: true
+    - name: n_sections
+      type: integer
+      default: 3
+      minimum: 1
+      maximum: 8
+    - name: k_per_section
+      type: integer
+      default: 8
+      description: Number of chunks to ground each section on.
+    - name: locale
+      type: string
+      enum: ["en", "id"]
+      default: "en"
+
+  outputs:
+    schema: WriterDraftSummary
+    fields:
+      - topic
+      - locale
+      - sections[]:
+          - title
+          - body
+          - winner   # "A" | "B"
+          - citations
+      - rubric_mean
+      - generated_at
+
+  triggers:
+    - on_endpoint: POST /draft
+
+  runtime:
+    python:
+      module: klerk.agent.writer
+      callable: write_draft
+
+  pipeline:
+    stages:
+      - researcher          # gather_evidence per section
+      - drafter_a           # parallel with drafter_b
+      - drafter_b
+      - citation_tracer     # validate cited chunk_ids
+      - adjudicator         # pick winner
+      - critic              # 5-axis rubric on winner
+
+  concurrency:
+    note: |
+      Drafter-A and Drafter-B run via ThreadPoolExecutor(max_workers=2).
+      Verified against the Nemotron proxy README — no per-key RPM/TPM
+      cap; sequential fallback wired for 429.
+
+  llm:
+    provider: nemotron
+    model: nemotron-3-nano-omni

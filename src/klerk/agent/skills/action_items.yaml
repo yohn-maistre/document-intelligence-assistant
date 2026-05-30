@@ -1,0 +1,62 @@
+# agentskills.io manifest — capability B
+# Pulls structured action items out of a doc or text snippet.
+
+apiVersion: skills.dev/v1
+kind: Skill
+metadata:
+  name: klerk.action_item_extractor
+  version: 1.0.0
+  vendor: klerk
+  homepage: https://github.com/yohn-maistre/document-intelligence-assistant
+  license: MIT
+
+spec:
+  description: |
+    Extracts action items (assignee, action, due, priority, source_chunk)
+    from either a corpus doc (by doc_id) or a free-text snippet (e.g.
+    pasted meeting minutes). Source-chunk attribution is preserved so the
+    Studio can link each item back to the originating chunk.
+
+  inputs:
+    - name: doc_id
+      type: string
+      description: ID of a doc in the LanceDB corpus.
+      required: false
+    - name: text
+      type: string
+      description: Raw text to extract from. Mutually exclusive with doc_id.
+      required: false
+    - name: locale
+      type: string
+      enum: ["en", "id"]
+      default: "en"
+
+  outputs:
+    schema: ActionExtraction
+    fields:
+      - items[]:
+          - assignee
+          - action
+          - due
+          - priority
+          - source_chunk
+      - source
+
+  triggers:
+    - on_endpoint: POST /actions/extract
+    - on_demand: klerk CLI verb (TBD)
+
+  runtime:
+    python:
+      module: klerk.agent.action_items
+      callable: extract
+
+  observability:
+    traces:
+      - phoenix:
+          span_name: klerk.skill.action_item_extractor
+
+  llm:
+    provider: nemotron
+    model: nemotron-3-nano-omni
+    response_format: json_object
