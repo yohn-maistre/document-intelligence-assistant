@@ -49,8 +49,10 @@ dependencies = [
     "openinference-instrumentation-litellm>=0.1.0",
     "opentelemetry-sdk>=1.27.0",
 
-    # Orchestration (Conflict Reporter spine)
+    # Orchestration (Conflict Reporter spine + chat orchestrator)
     "langgraph>=0.2.0",
+    "langchain-openai>=0.2.0",
+    "langchain-core>=0.3.0",
 
     # CLI + Studio
     "typer>=0.12.5",

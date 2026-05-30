@@ -23,7 +23,6 @@ from __future__ import annotations
 import asyncio
 import json
 import os
-import re
 import time
 import uuid
 from contextlib import asynccontextmanager
@@ -31,7 +30,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import AsyncIterator
 
-import litellm
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from sse_starlette.sse import EventSourceResponse
@@ -63,10 +61,7 @@ from klerk.api.models import (
     RubricMean,
     SyncStatus,
 )
-from klerk.agent.prompts.system import ANSWER_PROMPT, KLERK_SYSTEM
 from klerk.llm.nemotron import NemotronConfig
-
-_CITATION_RE = re.compile(r"\[([a-zA-Z0-9_\-]+):(\d+)\]")
 
 
 def _state_dir() -> Path:
@@ -178,95 +173,50 @@ async def _chat_event_stream(
     req: ChatRequest,
     start: float,
 ) -> AsyncIterator[dict]:
-    """Yield SSE events: retrieval → token*N → citations → done."""
-    from klerk.rag.retrieve import search_hybrid
+    """Drive one chat turn through the LangGraph orchestrator.
 
-    hits = await asyncio.to_thread(
-        search_hybrid, req.query, k_initial=16, k_final=req.k, rerank=True
-    )
+    The orchestrator (klerk.agent.orchestrator) routes among six tools, yields
+    session / tool_call / tool_result / token / citations / done events, and
+    pre-seeds search_hybrid every turn. This handler layers on multi-turn
+    memory (SessionStore) and the low-confidence escalation hook, then persists
+    the exchange.
+    """
+    import uuid
 
-    if not hits:
-        yield {
-            "event": "citations",
-            "data": json.dumps({"citations": [], "confidence": 0.0}),
-        }
-        yield {
-            "event": "token",
-            "data": json.dumps({
-                "text": (
-                    "I don't have enough information in the corpus to answer that. "
-                    "Try rephrasing or ingesting more docs."
-                ),
-            }),
-        }
-        total_ms = (time.perf_counter() - start) * 1000
-        yield {
-            "event": "done",
-            "data": json.dumps({"ttft_ms": total_ms, "total_ms": total_ms, "n_chunks": 0}),
-        }
-        return
+    from klerk.agent import orchestrator
+    from klerk.api.session import get_store
 
-    context = "\n\n".join(f"[{h.chunk_id}] {h.text}" for h in hits)
-    messages = [
-        {"role": "system", "content": KLERK_SYSTEM + "\n\n" + ANSWER_PROMPT},
-        {
-            "role": "user",
-            "content": f"QUESTION:\n{req.query}\n\nRETRIEVED CHUNKS:\n{context}",
-        },
-    ]
+    store = get_store()
+    session_id = req.session_id or f"sess_{uuid.uuid4().hex[:12]}"
 
-    cfg = NemotronConfig.from_env()
-    kwargs: dict = {
-        "model": cfg.litellm_model,
-        "messages": messages,
-        "api_base": cfg.base_url,
-        "api_key": cfg.api_key,
-        "temperature": 0.0,
-        "max_tokens": 600,
-        "stream": True,
-    }
-    if cfg.cf_headers:
-        kwargs["extra_headers"] = cfg.cf_headers
+    history: list[dict[str, str]] | None = None
+    if req.history_mode == "auto" and store.exists(session_id):
+        try:
+            history = store.build_prompt_history(session_id)
+        except Exception:  # noqa: BLE001 - history is best-effort
+            history = None
 
-    ttft_ms: float | None = None
-    accumulated = ""
-    try:
-        response = await litellm.acompletion(**kwargs)
-        async for chunk in response:
-            text = chunk.choices[0].delta.content
-            if text:
-                if ttft_ms is None:
-                    ttft_ms = (time.perf_counter() - start) * 1000
-                accumulated += text
-                yield {"event": "token", "data": json.dumps({"text": text})}
-    except Exception as e:  # noqa: BLE001 - surface failures in-stream
-        yield {
-            "event": "error",
-            "data": json.dumps({"detail": f"{type(e).__name__}: {e}"}),
-        }
-        return
+    answer = ""
+    confidence = 1.0
+    n_chunks = 0
+    async for event in orchestrator.arun(
+        req.query, session_id=session_id, locale=req.locale, history=history
+    ):
+        # Tap the stream to accumulate answer text + confidence for persistence
+        # and the escalation decision, then re-yield unchanged.
+        etype = event.get("event")
+        if etype == "token":
+            answer += json.loads(event["data"]).get("text", "")
+        elif etype == "citations":
+            confidence = json.loads(event["data"]).get("confidence", confidence)
+        elif etype == "done":
+            n_chunks = json.loads(event["data"]).get("n_chunks", 0)
+        yield event
 
-    citations = sorted({
-        f"{m.group(1)}:{m.group(2)}" for m in _CITATION_RE.finditer(accumulated)
-    })
-    cited_count = sum(1 for h in hits if h.chunk_id in citations)
-    if cited_count == len(hits):
-        confidence = 1.0
-    elif cited_count == 0:
-        confidence = 0.0
-    else:
-        confidence = (cited_count / len(hits)) * 0.9
-
-    yield {
-        "event": "citations",
-        "data": json.dumps({"citations": citations, "confidence": confidence}),
-    }
-
-    # Low-confidence escalation hook: draft an email to a human owner so the
-    # caller doesn't have to figure out who to ask. Failures are silent so
-    # the chat stream is never broken by escalation logic.
+    # Low-confidence escalation hook: draft an email to a human owner. Failures
+    # are silent so the chat stream is never broken by escalation logic.
     escalation_threshold = float(os.environ.get("KLERK_ESCALATION_THRESHOLD", "0.3"))
-    if confidence < escalation_threshold:
+    if confidence < escalation_threshold and n_chunks:
         try:
             from klerk.agent.escalation import draft as escalation_draft
 
@@ -274,22 +224,20 @@ async def _chat_event_stream(
                 escalation_draft,
                 question=req.query,
                 confidence=confidence,
-                retrieved_excerpt=context[:1200] if hits else "",
+                retrieved_excerpt=answer[:1200],
                 locale=req.locale,
             )
             yield {"event": "escalation", "data": draft.model_dump_json()}
         except Exception:  # noqa: BLE001
             pass
 
-    total_ms = (time.perf_counter() - start) * 1000
-    yield {
-        "event": "done",
-        "data": json.dumps({
-            "ttft_ms": ttft_ms or total_ms,
-            "total_ms": total_ms,
-            "n_chunks": len(hits),
-        }),
-    }
+    # Persist the turn (best-effort).
+    try:
+        store.append(session_id, "user", req.query)
+        if answer:
+            store.append(session_id, "assistant", answer)
+    except Exception:  # noqa: BLE001
+        pass
 
 
 def _wire_chat(app: FastAPI) -> None:
