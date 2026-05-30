@@ -71,6 +71,7 @@ dependencies = [
 
 [project.scripts]
 klerk = "klerk.cli.main:app"
+klerk-api = "klerk.api.server:main"
 klerk-mcp = "klerk.mcp.server:main"
 klerk-studio = "klerk.studio.app:main"
 
