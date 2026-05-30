@@ -1,0 +1,60 @@
+# Version control + IDE
+.git
+.github
+.gitignore
+.gitattributes
+.vscode
+.idea
+*.swp
+
+# Python build / cache
+__pycache__
+*.py[cod]
+*$py.class
+*.egg-info
+.eggs
+build
+dist
+.pytest_cache
+.ruff_cache
+.mypy_cache
+.coverage
+htmlcov
+.tox
+
+# Virtual envs
+.venv
+venv
+env
+
+# Klerk runtime artefacts (recreated per container)
+.lancedb
+.diskcache
+.phoenix
+.klerk
+.gptcache
+data/parsed
+data/output
+data/synth/.cache
+data/drive
+data/kg
+
+# Secrets — never bake into an image
+.env
+.env.*
+!.env.example
+.secrets
+
+# Experimental (TypeScript shell + Pi extension; not part of the runtime)
+experimental
+node_modules
+*.tsbuildinfo
+
+# Test artefacts
+tests/__pycache__
+*.sqlite
+*.sqlite-journal
+
+# Editor / OS
+.DS_Store
+Thumbs.db

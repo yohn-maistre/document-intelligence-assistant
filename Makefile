@@ -1,4 +1,4 @@
-.PHONY: help setup demo eval mcp studio studio-web phoenix clean
+.PHONY: help setup demo eval mcp studio studio-web phoenix api compose compose-down clean
 
 help:
 	@echo "klerk — Document Intelligence Assistant"
@@ -11,6 +11,9 @@ help:
 	@echo "  contradict     pairwise contradiction sweep over the KG"
 	@echo "  faq            Corpus Learning Agent → auto-FAQ"
 	@echo "  anomaly        z-score outlier detection + LLM justifications"
+	@echo "  api            run the FastAPI server locally (uvicorn :8000)"
+	@echo "  compose        docker compose up --build (FastAPI + Phoenix in one container)"
+	@echo "  compose-down   stop + remove the docker compose stack"
 	@echo "  mcp            klerk-mcp (stdio) — point Claude Desktop / Goose / Cursor at it"
 	@echo "  studio         Textual operator TUI"
 	@echo "  studio-web     Browser deploy via textual serve (textual >=0.86)"
@@ -51,6 +54,15 @@ demo:
 
 eval:
 	uv run python -m klerk.cli.main eval run --ragas --rubric
+
+api:
+	uv run klerk-api
+
+compose:
+	docker compose up --build
+
+compose-down:
+	docker compose down
 
 mcp:
 	uv run klerk-mcp

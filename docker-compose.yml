@@ -1,0 +1,89 @@
+# klerk — Document Intelligence Assistant
+#
+# Single-command bring-up:
+#
+#   1. cp .env.example .env  &&  fill in LITELLM_KEY + CF_CLIENT_ID +
+#      CF_CLIENT_SECRET (from the Nemotron user package zip) +
+#      DRIVE_FOLDER_ID + .secrets/service-account.json
+#   2. docker compose up --build
+#   3. open http://localhost:8000/docs    (API)
+#      open http://localhost:6006         (Phoenix UI)
+#
+# The api service runs FastAPI on :8000 with Phoenix instrumentation embedded
+# (the /docs endpoint links you straight into Phoenix at :6006). LanceDB is
+# embedded in the api process — no separate vector-DB container needed.
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: klerk:latest
+    container_name: klerk-api
+    ports:
+      - "${KLERK_API_PORT:-8000}:8000"
+      - "${PHOENIX_PORT:-6006}:6006"
+    env_file:
+      - .env
+    environment:
+      # State dirs inside the container — bind-mounted to volumes below so
+      # the corpus + manifest + Phoenix traces survive container restarts.
+      KLERK_STATE_DIR: /app/.klerk
+      KLERK_LANCEDB_DIR: /app/.lancedb
+      KLERK_DISKCACHE_DIR: /app/.diskcache
+      PHOENIX_WORKING_DIR: /app/.phoenix
+      KLERK_DRIVE_DOWNLOAD_DIR: /app/data/drive
+      # Drive Service Account path (mounted via volume below).
+      GOOGLE_APPLICATION_CREDENTIALS: /app/.secrets/service-account.json
+    volumes:
+      - klerk-state:/app/.klerk
+      - klerk-lancedb:/app/.lancedb
+      - klerk-diskcache:/app/.diskcache
+      - klerk-phoenix:/app/.phoenix
+      - ./data:/app/data
+      - ./.secrets:/app/.secrets:ro
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+    restart: unless-stopped
+
+  # ── Phoenix as a separate service ────────────────────────────────────────
+  # Phoenix is currently embedded in the api process (boots via
+  # klerk.obs.phoenix.launch() on first eval/observability call) so the
+  # base bring-up needs ONE container. The block below is the path to
+  # split Phoenix out for heavier observability use — uncomment and set
+  # OTEL_EXPORTER_OTLP_ENDPOINT in api's environment to enable.
+  #
+  # phoenix:
+  #   image: arizephoenix/phoenix:latest
+  #   container_name: klerk-phoenix
+  #   ports:
+  #     - "6006:6006"   # UI
+  #     - "4317:4317"   # OTLP gRPC ingest
+  #   volumes:
+  #     - klerk-phoenix:/data
+  #   restart: unless-stopped
+
+  # ── Google Workspace MCP (advanced agentic surface) ──────────────────────
+  # Opt-in side-car that gives Claude Desktop / Goose / Cursor access to
+  # Calendar / Gmail / Sheets / Drive through klerk-mcp's tool surface. Not
+  # on the /ingest path; see docs/integrations/gws-mcp.md for the wiring.
+  #
+  # gws-mcp:
+  #   image: ghcr.io/taylorwilsdon/google_workspace_mcp:latest
+  #   container_name: klerk-gws-mcp
+  #   environment:
+  #     GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID}
+  #     GOOGLE_OAUTH_CLIENT_SECRET: ${GOOGLE_OAUTH_CLIENT_SECRET}
+  #   ports:
+  #     - "8080:8080"
+  #   restart: unless-stopped
+
+volumes:
+  klerk-state:
+  klerk-lancedb:
+  klerk-diskcache:
+  klerk-phoenix:
