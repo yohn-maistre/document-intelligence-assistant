@@ -43,6 +43,8 @@ out/
 .phoenix/
 # .klerk/: checkpoint db + bg state + bg last cycle report
 .klerk/
+# .planning/: scratch plans + notes, not part of the shipped repo
+.planning/
 *.sqlite
 *.sqlite-journal
 *.sqlite-wal
