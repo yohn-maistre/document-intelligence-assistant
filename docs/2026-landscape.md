@@ -1,100 +1,65 @@
-# 2026 RAG / Agent Landscape — what klerk knows about and how it relates
+# 2026 landscape — what we explored, what we shipped
 
-> Companion to `design-decisions.md`. This doc maps the May 2026 landscape so
-> the migration paths in the design-decisions doc are concrete.
+> One-page snapshot of the May 2026 RAG / agent landscape as it bore on
+> klerk's design choices. The full reasoning per rejection (LangGraph,
+> Langfuse, GPTCache, HippoRAG 2, LightRAG, Microsoft GraphRAG, Cognee,
+> Letta, mem0, Zep, Kùzu, Memgraph, Neo4j, ColPali, ColQwen2.5, Jina-v4,
+> omni-embed-nemotron-3b) lives in [`design-decisions.md`](design-decisions.md).
+> This page is the lightweight map.
 
-## Anthropic's *Dynamic Workflows* — the paradigm klerk extracts
+## Paradigm anchor
 
-Anthropic launched [Dynamic Workflows in Claude Code](https://www.anthropic.com/research/claude-code) (May 2026, powered by Claude Opus 4.8). The headline shift: instead of orchestrating subagents through a static framework, **Claude writes a fresh orchestration script per task at runtime** and deploys parallel subagents that adversarially verify each other.
+Anthropic's *Building Effective Agents* (Dec 2024, updated 2026) and the
+*Dynamic Workflows* line in Claude Code (May 2026, Opus 4.8) set the
+stance: prefer simple, composable patterns over frameworks; own the
+loop; reach for graphs only when the state shape genuinely benefits.
+klerk extracts the *spirit* (parallel adversarial subagents in the
+proposal pipeline; structured tool outputs over chat-context state) but
+doesn't take on runtime code-generation risk.
 
-Four primitives, four levels of applicability for klerk:
+## What we picked
 
-| Primitive | klerk's application | Where it lives |
-|---|---|---|
-| **Multi-agent orchestration** | 7-stage proposal pipeline | `agent/proposal_pipeline.py` |
-| **Adversarial self-verification** | Drafter-A ‖ Drafter-B → Adjudicator picks winner → Critic scores | `agent/proposal_pipeline.py` |
-| **Runtime memory / context efficiency** | Pydantic AI structured tool outputs + Phoenix SQLite traces; intermediate state in structured store, not chat context | `agent/schemas.py`, `obs/phoenix.py` |
-| **Long-running resumability** | SQLite checkpoint table — killed `klerk propose` resumes from last completed section | `agent/checkpoint.py` (SHOULD) |
-| **LLM writes the orchestration script** | Too risky for a take-home (sandbox + code-exec safety). Documented as the natural evolution path. | STRETCH item #27 |
+| Layer            | Pick                              | One-line rationale |
+|------------------|-----------------------------------|--------------------|
+| Chat LLM         | Nemotron via Cloudflare-tunneled LiteLLM proxy | Brief contract. No fallbacks. |
+| Embedder         | BGE-M3 dense head (FlagEmbedding) | Multilingual, Bahasa-strong, self-hosted. |
+| Reranker         | BGE-M3 ColBERT head (MaxSim)      | Same model file. ~1GB lighter than v4's separate cross-encoder. |
+| Vector + BM25    | LanceDB embedded + Tantivy        | One process, one hybrid API call. |
+| Fusion           | RRF (k=60), hand-rolled           | 30 LOC; no library obscures the formula. |
+| Parser           | Docling + PyMuPDF fallback        | Layout-aware; PyMuPDF guard for torch install issues. |
+| Orchestration    | Hand-rolled loops + LangGraph (1 flow) | Loop ownership = system ownership. LangGraph only for the Conflict Reporter. |
+| Cache            | DiskCache (exact) + LanceDB semantic | Same vector primitive does retrieval + cache. |
+| Observability    | Arize Phoenix (embedded SQLite)   | OpenInference standard; ports to Langfuse / Datadog later. |
+| API surface      | FastAPI with SSE streaming        | Brief-mandated. 9 routes. |
+| Studio UI        | Textual (TUI + browser via `textual serve`) | Five-panel keyboard-first; same source = TUI + browser. |
+| Skill manifests  | agentskills.io v1                 | Portable across MCP-aware runtimes. |
 
-klerk's framing: **"klerk implements the spirit of Anthropic's May 2026 Dynamic Workflows paradigm — adversarial subagent verification, context efficiency via structured outputs, and SQLite-checkpointed resumability — without the runtime code-generation risk."**
+## What we explored and rejected
 
-## Agent observability — Phoenix vs Langfuse vs the rest
+| Candidate                       | Killed by |
+|---------------------------------|-----------|
+| LangGraph everywhere            | Over-applying a graph to single-loop flows signals the wrong instinct. We use it for one flow. |
+| Langfuse self-hosted            | Six-container Compose stack; wrong fit for one reviewer's laptop. Phoenix embedded does the job. |
+| GPTCache                        | Older-than-2024 server-shaped abstraction. DiskCache + LanceDB semantic in-process is cleaner. |
+| HippoRAG 2                      | Alpha; hardcoded to NV-Embed-v2; no LanceDB adapter. +2.6% F1 doesn't justify 30+ hours of plumbing. |
+| LightRAG                        | No LanceDB backend; custom adapter not worth the time. We approximate dual-level with hybrid+rerank+KG. |
+| Microsoft GraphRAG              | $100+ to build a KG over 25 docs. Our Pydantic-AI JSON-mode extraction runs $10-50 and is transparent. |
+| Cognee / Letta / mem0 / Zep     | Framework-shaped memory layers; right at scale, wrong at take-home size. |
+| Kùzu                            | Archived Oct 2025 (Apple acquisition). |
+| Memgraph                        | BSL 1.1 noncommercial clause wrong for the take-home. |
+| Neo4j                           | Server, license review, JVM tuning. Wrong operational fit. |
+| Cohere Embed v4 / Rerank 4      | Best MTEB; requires Cohere API key. Brief forbids paid embedders. |
+| MinerU 2.5 parser               | 14% accuracy drop on non-Latin scripts (MDPBench Apr 2026). Risky for Bahasa. |
+| ColPali / ColQwen2.5 / Jina-v4  | Bahasa+JP unbenchmarked; tables degrade to page blobs; CPU multi-vector 5-10× slower than text-native. |
+| omni-embed-nemotron-3b          | NVIDIA OneWay Noncommercial license. |
 
-| Stack | Shape | Fit for take-home |
-|---|---|---|
-| **Arize Phoenix** | SQLite-backed, embedded, OpenInference/OTel | ✓ **klerk's pick** |
-| OpenLLMetry (Traceloop) | OTel-native, file-based | Strong alternative; less polished UI than Phoenix |
-| Langfuse | 6-container Compose stack | Production-grade; wrong for laptop demo |
-| LangSmith | Managed cloud only | Locked to LangChain ecosystem |
-| Helicone | Proxy-based, no SDK changes | Best for high-volume production traffic |
-| Braintrust / Lunary | Managed eval + obs | OK but adds a hosted dep |
+## When to revisit any of the above
 
-OpenInference is the OTel-for-LLMs spec that all of these are converging on. By using Phoenix + OpenInference, klerk's traces are portable to any of the above at migration time.
+The table flips at:
+- **>10k docs** → migrate KG to a real graph DB; revisit Cognee.
+- **Multi-tenant** → Cognee / Letta become correct.
+- **Strict cost SLAs** → Helicone / Portkey for budget routing.
+- **Beyond simple multi-hop** → HippoRAG 2 once it exits alpha + adds LanceDB; or Path-RAG.
+- **Page-image-heavy corpus** → re-evaluate the vision-language embedders once Bahasa/JP benchmark coverage lands.
 
-## Retrieval — what klerk knows about
-
-| System | Status May 2026 | klerk's stance |
-|---|---|---|
-| **LanceDB hybrid (Tantivy BM25 + vector)** | Stable; native hybrid in March 2026 | ✓ Klerk's foundation |
-| BGE-M3 + BGE-Reranker-v2-m3 | Stable; multilingual leader for Bahasa | ✓ Klerk's pick |
-| Microsoft GraphRAG | Stable; $100+ per 25 docs | Skipped (cost). DIY Pydantic JSON-mode extraction. |
-| LightRAG | EMNLP 2025; pluggable backends (no LanceDB) | Skipped (integration cost). Concept extracted via our reranker + PageRank tiebreaker. |
-| HippoRAG 2 | Alpha (`2.0.0a4`); +2.6% F1 multi-hop | Skipped (alpha + LanceDB lock-in). Idea extracted in `rag/pagerank.py`. |
-| RAPTOR | Stanford; hierarchical clustering | Best on >1k docs; overkill at 25. |
-| R2R | Production-grade; Docker-served | Strong alternative if we needed managed multi-tenant. |
-| RAGFlow | Multi-agent doc RAG with UI | Same shape but heavier; klerk is the take-home version. |
-| Cohere Embed v4 / Rerank 4 | Best MTEB; API-key dep | Skipped — BGE self-hosted wins for take-home. |
-| Voyage 3 / NV-Embed-2 | Strong embedding contenders | Future swap candidates. |
-
-## Orchestration
-
-| Framework | Status May 2026 | klerk's stance |
-|---|---|---|
-| **(none) — hand-rolled** | Per Anthropic stance | ✓ klerk's choice |
-| LangGraph 2.0 | 90M monthly DLs; Uber/JPM/Klarna | The right answer at scale; signals scaffolding at take-home scale. |
-| CrewAI | Strong prototyping ergonomics | Same critique. |
-| AutoGen | Conversational multi-party | Niche fit. |
-| Pydantic AI | Type-safe structured outputs | ✓ Klerk uses it as the structured-output primitive (not the full agent abstraction). |
-| Mastra | TS-first, VC-backed | TS alternative to Pi if we ever ditch Pi. |
-| Vercel AI SDK | Provider routing + stopWhen | Good SDK; not a TUI solution. |
-| Flue (Astro Labs) | Headless CI/CD agent harness | Wrong shape for a chat agent. |
-
-## Memory / knowledge engines
-
-| System | Status | klerk's stance |
-|---|---|---|
-| **(hand-rolled background ingestion)** | ~80 LOC, APScheduler | ✓ Klerk's choice for the take-home |
-| Cognee | Open-source (Apache 2.0), production at Bayer, 1M+ pipelines/mo | Klerk is a deliberate slimmer version. Cognee MCP is STRETCH item #28. |
-| Letta (ex-MemGPT) | Production-ready Apr 2026 | Same critique as Cognee. |
-| mem0 | Token-efficient memory; async tools | Same critique. |
-| Zep | Temporal KG; LongMemEval leader | The right answer when temporal memory matters; overkill at our scale. |
-
-## TUI / CLI stack
-
-| Library | Stance |
-|---|---|
-| **Pi `@mariozechner/pi-coding-agent`** | Hidden runtime for klerk-cli chat; we get the diff-rendered TUI for free without rebuilding it. |
-| Ink + chalk | klerk-cli's banner / help / version screens. |
-| Textual | Studio TUI — 5 panels (corpus / eval / traces / proposals / KG). |
-| textual-web | STRETCH — `textual serve` for browser deploy. |
-| Hermes Agent (NousResearch) | The architectural pattern klerk copies (one tool layer, four surfaces, MCP-as-gateway). |
-| Midday CLI | The product-feel reference (verbs as headline, agent-callable). |
-
-## LLM gateways
-
-| Gateway | Stance |
-|---|---|
-| **LiteLLM SDK (in-process)** | ✓ Klerk's pick — fallbacks + cost + cache hooks in one library, no extra process. |
-| Portkey AI Gateway | Right answer for production multi-region + budget guardrails. |
-| Helicone Gateway | Proxy + observability combined. |
-| OpenRouter | Managed gateway; Nemotron support. |
-| Vercel AI Gateway | Vercel-deployment-locked. |
-| Cloudflare AI Gateway | Cloudflare Workers-locked. |
-
-## Indonesian market context (May 2026)
-
-- **SEA-HELM** is the canonical Bahasa benchmark (Singapore AI).
-- **PDP Law** (enforced 2026) makes local inference a regulatory tailwind, not just a cost optimisation.
-- klerk's `--locale id` mode routes to Qwen3 (current Bahasa-strong leader on SEA-HELM); the STRETCH local-LLM script downloads a Gemma 3 / Qwen 3.5 / Qwen 3.6 small model + sets up llama.cpp for a fully on-prem path.
-- The 5-axis rubric reports per-locale, so Bahasa parity is visible in every eval run rather than buried.
+For the per-rejection deep dive, see [design-decisions.md](design-decisions.md).

@@ -1,254 +1,242 @@
 # klerk
 
-> **Document Intelligence Assistant** — multi-agent RAG over your documents.
-> Hybrid retrieval, knowledge-graph extraction, adversarial proposal pipeline,
-> custom 5-axis eval rubric, polished operator TUI. One tool layer, four
-> surfaces.
+> **Document Intelligence Assistant** — production-shaped RAG over a Drive
+> corpus with five agentic capabilities, served via FastAPI, evaluated
+> against a 20-question rubric. Single-command bring-up via Docker.
 
-Take-home for the **Middle AI Engineer** role at **PT Fata Organa Solusi** (Indonesian voice/audio AI + SaaS), planned **2026-05-28**.
+Take-home submission for the **Middle AI Engineer** role at
+**PT Fata Organa Solusi**. The brief: build a doc-intelligence assistant
+for a fictional Indonesian-Japanese tech firm using **only** the
+provided Nemotron proxy (`nemotron-3-nano-omni` over a private
+Cloudflare-tunneled LiteLLM gateway).
 
-## 30-second demo
+```
+                ┌─────────── docker compose up ───────────┐
+                │                                          │
+                ▼                                          ▼
+   FastAPI :8000  ─────── 9 routes ────────▶   Phoenix :6006
+        │
+        ├── /chat              SSE stream over CRAG-grounded retrieval
+        ├── /ingest            Drive (Service Account) or local path
+        ├── /sync-status       manifest snapshot
+        ├── /actions/extract   action items (capability B)
+        ├── /conflicts/scan    LangGraph spine (capability C)
+        ├── /draft             multi-drafter writer (capability D)
+        ├── /drift/recent      jsonl events (capability E)
+        └── /drift/scan        + scheduled nightly via APScheduler
+```
+
+## Quick start
 
 ```bash
-# 1. install (uv + pnpm, ~3 min on cold cache)
-make setup
+# 1. Fill in credentials (from the Nemotron password-zip)
+cp .env.example .env
+$EDITOR .env    # LITELLM_KEY, CF_CLIENT_ID, CF_CLIENT_SECRET,
+                # GOOGLE_APPLICATION_CREDENTIALS, DRIVE_FOLDER_ID
 
-# 2. set your Nemotron proxy credentials (from the password-zip user-package)
-cp .env.example .env  &&  $EDITOR .env   # LITELLM_KEY + CF_CLIENT_ID + CF_CLIENT_SECRET
+# 2. Bring everything up (one command per the brief)
+docker compose up --build
 
-# 3. end-to-end on the seed corpus (3 hand-authored docs, 40% Bahasa)
-make demo
-
-# 4. eval (RAGAS + 5-axis rubric + SEA-HELM-style Bahasa parity)
-make eval
-
-# 5. operator panel
-make studio
+# 3. Open
+#    http://localhost:8000/docs    interactive API
+#    http://localhost:6006         Phoenix traces
 ```
 
-To run klerk on your own documents: drop them into `data/raw/` and re-run `klerk index build`. Drive ingestion is supported but optional (`klerk drive pull --folder <id>`).
-
-## Four surfaces, one backend
-
-```
-       Nemotron proxy (llm-proxy.atlas-horizon.com/v1, single-model:
-       nemotron-3-nano-omni; CF-Access service token + LiteLLM key)
-                          ▲
-                          │  via LiteLLM SDK (in-process, fallbacks + cost + cache)
-                          │  + DiskCache exact + LanceDB semantic cache + Pydantic AI
-                          │
-            ┌─────────────┴─────────────────────────────────────────┐
-            │   TOOL SURFACE  (Python; 14 tools)                    │
-            │   search_hybrid · rerank_bge · decompose · judge      │
-            │   list_docs · read_chunk · extract_kg · contradict    │
-            │   propose · adjudicate_drafts · score_rubric          │
-            │   anomaly_scan · faq_build · trace_citations          │
-            └─┬──────────┬───────────┬──────────────┬───────────────┘
-              │          │           │              │
-        ┌─────▼──────┐ ┌─▼────┐ ┌────▼────────┐ ┌───▼─────────┐
-        │ Typer CLI  │ │ klerk│ │ klerk-mcp   │ │ FastAPI+SSE │
-        │ + Rich     │ │ -cli │ │ MCP gateway │ │ (stub for   │
-        │ (PRIMARY)  │ │ chat │ │ (stdio)     │ │  web hook)  │
-        └────────────┘ └──────┘ └─────────────┘ └─────────────┘
-                                       │
-                          ┌────────────┴────────────┐
-                          │   klerk studio          │
-                          │   5-panel Textual TUI   │
-                          │   (read-only operator)  │
-                          └─────────────────────────┘
-```
-
-| Surface | Who uses it | How |
-|---|---|---|
-| **CLI verbs** (the headline brand) | Humans + agents | `uv run klerk ask "..."` · `uv run klerk propose "..."` · `--json` for agents |
-| **klerk-cli chat** | Humans | `klerk chat` — Pi runs hidden underneath; never appears in any output |
-| **MCP gateway** | Other agents | `klerk-mcp` (stdio); Claude Desktop / Goose / Cursor / Pi point at it |
-| **Studio TUI** | Operators | `klerk studio` — 5 panels (corpus / eval / traces / proposals / KG) |
-
-LanceDB does double duty: corpus retrieval AND the semantic LLM cache live in the same vector primitive. One primitive, two roles. See `docs/design-decisions.md` for the full rationale.
-
-## What klerk does
-
-**MUST tier** (shipped):
-
-1. **Hybrid retrieval + reranking** — LanceDB native (vector + Tantivy BM25) + hand-rolled RRF (`rag/fusion.py`) + BGE-Reranker-v2-m3 cross-encoder
-2. **Q&A with citations** (`klerk ask`) — CRAG-lite: decompose → retrieve → rerank → judge → correct (≤1 round) → answer with `[doc:chunk]`
-3. **Adversarial proposal pipeline** (`klerk propose`) — 7 stages: Researcher → Scope → **Drafter-A ‖ Drafter-B** → Citation Tracer → **Adjudicator** → Critic. The Dynamic-Workflows extract: parallel drafters compete, adjudicator picks winner, critic scores against the 5-axis rubric.
-4. **Knowledge graph** (`klerk kg extract`) — Pydantic AI structured outputs → NetworkX (DIY; not GraphRAG / LightRAG / HippoRAG 2; see design-decisions for the cost analysis)
-5. **Contradiction report** (`klerk contradict scan`) — pairwise scan over KG entities, surfaces "Doc A says X, Doc B says ¬X"
-6. **Auto-FAQ** (`klerk faq build`) — Corpus Learning Agent generates its own questions per doc + answers them via CRAG
-7. **Two-layer LLM cache** — DiskCache (exact) + LanceDB `llm_cache` table (semantic, cosine > 0.95)
-8. **Replay via cache + Phoenix** — re-run identical prompts hits cache deterministically; Phoenix preserves all spans
-9. **Arize Phoenix** observability (embedded SQLite, OpenInference / OpenTelemetry standard; replaces Langfuse-the-6-container-Compose-stack)
-10. **RAGAS + custom 5-axis rubric + SEA-HELM-style Bahasa parity** (`klerk eval run`)
-11. **Bahasa-heavy seed corpus** (40% Bahasa across 3 hand-authored docs with cross-doc seeded facts for multi-hop probes)
-12. **klerk-cli chat shell** (Ink banner / help / version; delegates to Pi as a hidden runtime)
-13. **MCP gateway** (`klerk-mcp`, 14 tools over stdio)
-14. **`@yohnmaistre/pi-extension-klerk` npm package** (publishable; makes us a Pi *contributor*)
-15. **`docs/design-decisions.md`** — every framework choice + every runner-up rejected, with Anthropic citations as the spine
-
-**SHOULD tier** (shipped):
-
-16. **Textual Studio TUI** — `klerk studio`, 5 panels
-17. **Background Ingestion Agent** — `klerk bg start | status` (APScheduler, no Cognee/Letta/mem0 dep)
-18. **Mid-run resumability** — SQLite checkpoint store (`klerk trace list`)
-19. **Anomaly detection** — `klerk anomaly scan` (z-score on doc-centroid distance + LLM justification)
-20. **KG visualization** — `klerk kg viz` (pyvis HTML; static fallback)
-21. **PageRank tiebreaker** — `rag/pagerank.py` (the HippoRAG 2 *idea* extracted; ~80 LOC; no framework)
-
-**STRETCH tier** (documented + scripts shipped, integration deferred):
-
-26. **Local LLM** — `scripts/setup-local-llm.sh` builds llama.cpp + downloads Gemma 3 E4B-IT (or Qwen 3.5/3.6 small), serves on :8080 (OpenAI-compatible). PDP Law 2026 local-inference story.
-
-Items 22-25, 27-28 (adversarial query agent, drift detection, textual-web browser deploy, FastAPI+SSE web hook, Dynamic-Workflows-v1 LLM-writes-orchestration experiment, Cognee MCP swap) — documented in `docs/design-decisions.md` and `docs/2026-landscape.md` as the migration paths; not implemented.
-
-## Verb reference
+Without Docker (uv directly):
 
 ```bash
-# ─── ingestion ──────────────────────────────────────────────────────────────
-klerk drive pull --folder <id> --out data/raw/    # optional (service-acct)
-klerk parse <path>                                 # Docling / PyMuPDF / native
-klerk index build --src data/seed --rebuild        # parse + chunk + embed + upsert
-klerk index stats                                  # corpus stats
-
-# ─── retrieval ──────────────────────────────────────────────────────────────
-klerk search bm25   "<q>" -k 8                     # LanceDB native FTS
-klerk search vector "<q>" -k 8                     # BGE-M3 + LanceDB cosine
-klerk search hybrid "<q>" -k 8 [--no-rerank]       # RRF + BGE-Reranker
-
-# ─── Q&A / proposal / FAQ / contradiction ───────────────────────────────────
-klerk ask    "<q>" [--locale en|id] [--trace] [--no-correct]
-klerk propose "<topic>" -n 3 [--locale en|id]      # adversarial pipeline
-klerk faq build [--per-doc 5]                      # Corpus Learning Agent
-klerk contradict scan [--locale en|id]             # pairwise KG sweep
-
-# ─── KG ─────────────────────────────────────────────────────────────────────
-klerk kg extract [--rebuild]                       # Pydantic AI → NetworkX
-klerk kg stats
-klerk kg show [--entity ID] [--limit 20]
-klerk kg viz [--out PATH]                          # pyvis HTML
-
-# ─── anomaly + background ───────────────────────────────────────────────────
-klerk anomaly scan [--sigma 2.0] [--locale en|id]
-klerk bg start [--interval 60] [--once]            # APScheduler watch loop
-klerk bg status                                    # last cycle report
-
-# ─── eval ───────────────────────────────────────────────────────────────────
-klerk eval run [--ragas/--no-ragas] [--rubric/--no-rubric] [--seahelm/--no-seahelm]
-                [--locale en|id]
-
-# ─── surfaces ───────────────────────────────────────────────────────────────
-klerk chat                                         # via klerk-cli (TS shell)
-klerk-mcp                                          # MCP server (stdio)
-klerk studio [--serve]                             # Textual TUI
-klerk trace list [--op NAME] [--limit 20]          # checkpoint runs
-
-# ─── observability ──────────────────────────────────────────────────────────
-klerk smoke                                        # h0 LiteLLM + Phoenix check
+make setup           # uv sync --extra dev
+make api             # uvicorn klerk.api.server:app
+make studio          # textual operator TUI
 ```
 
-## Architecture & engineering log
+## The five agentic capabilities
 
-| Doc | What's in it |
-|---|---|
-| [docs/architecture.md](./docs/architecture.md) | ASCII diagram + Hermes-pattern notes + the 4-surface story |
-| [docs/design-decisions.md](./docs/design-decisions.md) | Every framework pick, every runner-up rejected, with Anthropic *Building Effective Agents* + *Dynamic Workflows* (May 2026) as the spine |
-| [docs/2026-landscape.md](./docs/2026-landscape.md) | The May 2026 field map — LightRAG / HippoRAG 2 / GraphRAG / Cognee / Langfuse / Pi / Hermes / Goose / Mastra |
-| [docs/proposal-rubric.md](./docs/proposal-rubric.md) | The 5-axis custom rubric methodology |
-| [docs/bahasa-eval.md](./docs/bahasa-eval.md) | SEA-HELM-style Bahasa parity methodology + PDP Law 2026 |
+The brief asks for ≥1 from menu A/B/C; we ship all five plus E:
 
-## MCP — agent-to-agent
+| ID | Capability | Endpoint | Where |
+|----|------------|----------|-------|
+| A  | Escalation Drafter — routes a low-confidence question to the right human owner with a structured email draft | inline `/chat` event when confidence < 0.3 | `src/klerk/agent/escalation.py` |
+| B  | Action Item Extractor — pulls (assignee, action, due, priority, source_chunk) from a doc or text | `POST /actions/extract` | `src/klerk/agent/action_items.py` |
+| C  | Conflict Reporter — cross-doc contradiction sweep through a 4-node LangGraph StateGraph | `POST /conflicts/scan` | `src/klerk/orchestrate/conflict_graph.py` |
+| D  | Writer — adversarial multi-drafter proposal pipeline (Drafter-A + Drafter-B + Adjudicator + Critic) | `POST /draft` | `src/klerk/agent/writer.py` + `proposal_pipeline.py` |
+| E  | Drift Detector — scheduled corpus diff (doc_added / doc_changed / doc_removed / scope_drift) | `GET /drift/recent` + `POST /drift/scan` | `src/klerk/agent/drift.py` + `src/klerk/scheduled/drift_runner.py` |
 
-`klerk-mcp` exposes 14 tools over stdio. Any MCP-aware client can drive klerk:
+Each capability ships an agentskills.io v1 YAML manifest under
+`src/klerk/agent/skills/` so any compatible runtime can mount them
+through klerk's Python entrypoints.
 
-**Claude Desktop** (`~/Library/Application Support/Claude/claude_desktop_config.json` or equivalent):
+## Architecture
 
-```json
-{
-  "mcpServers": {
-    "klerk": {
-      "command": "klerk-mcp"
-    }
-  }
-}
+```
+                     ┌────────────────────────┐
+                     │   Reviewer's machine   │
+                     │   docker compose up    │
+                     └───────────┬────────────┘
+                                 │
+              ┌──────────────────┼─────────────────────┐
+              │                  │                     │
+      ┌───────▼────────┐  ┌──────▼─────────┐  ┌────────▼──────────┐
+      │   api          │  │   phoenix      │  │  gws-mcp (opt-in) │
+      │   FastAPI:8000 │  │   :6006        │  │  stdio / http     │
+      └───────┬────────┘  └────────────────┘  └───────────────────┘
+              │
+   ┌──────────┼───────────────────────────────────────────────┐
+   │   /chat /ingest /sync-status /health /openapi.json       │
+   │   /actions/extract /conflicts/scan /draft /drift/*       │
+   │                                                          │
+   │   ┌─────────────┐  ┌─────────────┐  ┌──────────────────┐ │
+   │   │ drive/sync  │  │ rag/        │  │ agent/           │ │
+   │   │ Service Acc │─▶│ chunker     │─▶│  A escalation    │ │
+   │   │ + manifest  │  │ embed BGE-M3│  │  B action_items  │ │
+   │   │ + changes   │  │ store Lance │  │  C (LangGraph)   │ │
+   │   └─────────────┘  │ retrieve    │  │  D writer        │ │
+   │                    │ rerank M3-CB│  │  E drift         │ │
+   │                    └──────┬──────┘  └──────┬───────────┘ │
+   │                           │                │             │
+   │                           └────────┬───────┘             │
+   │                                    ▼                     │
+   │                     ┌─────────────────────────┐          │
+   │                     │ llm/router → LiteLLM    │          │
+   │                     │ → CF Access (headers)   │          │
+   │                     │ → Nemotron proxy        │          │
+   │                     │ → nemotron-3-nano-omni  │          │
+   │                     └─────────────────────────┘          │
+   └──────────────────────────────────────────────────────────┘
 ```
 
-Then in any Claude chat: *"Use klerk's `propose` tool to draft a 3-section project brief for Pelangi's IP-clause renegotiation."*
+### LangGraph spine (Conflict Reporter, capability C)
 
-Goose, Cursor, and Pi work the same way. The Pi extension `@yohnmaistre/pi-extension-klerk` (in `pi-extension-klerk/`) pre-registers klerk's skills if you'd rather ship them with a Pi instance.
+```mermaid
+graph TD
+  retrieve_docs --> pair_facts
+  pair_facts --> judge_conflict
+  judge_conflict --> format_report
+  format_report --> __end__
+```
 
-## Stack
+Each node is independently inspectable; the StateGraph carries a
+checkpointer hook for resumability. The Mermaid file at
+`docs/conflict-graph.mmd` is auto-generated by
+`klerk.orchestrate.conflict_graph.export_diagram()` so the diagram
+above stays in sync with the actual compiled graph.
 
-| Layer | Pick |
-|---|---|
-| Chat harness | klerk-cli (TS, Ink) + Pi as hidden runtime |
-| Orchestration | Hand-rolled (`agent/crag.py`, `agent/proposal_pipeline.py`); no LangGraph |
-| LLM gateway | LiteLLM SDK (in-process); Nemotron proxy (CF Access + Bearer) + optional Bahasa endpoint + optional fallbacks |
-| Vector + BM25 | LanceDB native hybrid (Tantivy FTS, March 2026) |
-| Embeddings | BGE-M3 (multilingual, self-hosted) |
-| Reranker | BGE-Reranker-v2-m3 (cross-encoder) |
-| Knowledge graph | NetworkX in-memory + JSON; Pydantic AI extraction |
-| Cache | DiskCache (exact) + LanceDB `llm_cache` (semantic) |
-| Observability | Arize Phoenix (SQLite-backed, OpenInference) |
-| Parsing | Docling 2.72+ primary; PyMuPDF fallback |
-| Background ingestion | APScheduler + asyncio (no Cognee / Letta / mem0) |
-| Studio | Textual |
-| Eval | RAGAS + custom 5-axis rubric + SEA-HELM-style Bahasa |
-| MCP | Python `mcp` SDK over stdio |
+## Retrieval pipeline
 
-See `docs/design-decisions.md` for the *why* of every line above.
+| Stage | Implementation | What it does |
+|-------|----------------|--------------|
+| Parser | Docling 2.5+ (PyMuPDF fallback) | Layout-aware extraction with `KLERK_PARSER=pymupdf` escape hatch. |
+| Chunker | `src/klerk/rag/chunker.py` (~120 LOC) | Token-aware, tokenizer-pluggable (tiktoken → transformers → char heuristic). |
+| Embedder | BGE-M3 dense head via `FlagEmbedding.BGEM3FlagModel` | Multilingual, 1024-d, L2-normalised. Bahasa-strong. |
+| Vector store | LanceDB embedded | One process. Hybrid API exposes vector + BM25 in one call. |
+| Sparse | Tantivy FTS native to LanceDB | BM25 over the same columns. |
+| Fusion | RRF (k=60), ~30 LOC, hand-rolled | Reciprocal Rank Fusion. |
+| Rerank | BGE-M3 ColBERT head (MaxSim) | Same model as the embedder; no second model load. ~1GB lighter container than the v4 separate-cross-encoder path. |
 
-## Quickstart for the reviewer
+See [docs/design-decisions.md](docs/design-decisions.md) §v5-1 and §v5-2
+for the reranker collapse and the vision-language embedder evaluation.
+
+## Brief-spec compliance
+
+| Brief constraint                                        | Where        |
+|---------------------------------------------------------|--------------|
+| Only Nemotron proxy as the LLM (no OpenAI / Anthropic)  | `src/klerk/llm/router.py` + `nemotron.py` |
+| FastAPI server with `/chat /ingest /sync-status /health`| `src/klerk/api/server.py` |
+| Drive incremental sync (`changes.list` + `pageToken`)   | `src/klerk/drive/sync.py` |
+| ≥1 agentic capability from menu A/B/C                   | All five shipped — see capability matrix above |
+| 25-30 doc synthetic corpus with the format/locale/contradiction/table/cross-ref constraints | `src/klerk/synth/specs.py`; `klerk synth check` |
+| Own 20-Q eval set: 8 factual / 5 multi-hop / 3 conflict / 2 Bahasa / 2 trick | `evaluation_set.json` |
+| `docker compose up`                                     | `Dockerfile` + `docker-compose.yml` |
+| README, EVAL.md, DATA_GENERATION.md                     | this file + [EVAL.md](EVAL.md) + [DATA_GENERATION.md](DATA_GENERATION.md) |
+| "Don't hallucinate; say you don't know" handling        | `/chat` empty-retrieval path; `should_say_dont_know` items in eval (Q19, Q20); confidence-floor escalation |
+
+## Design influences
+
+| Source | What we extracted |
+|--------|-------------------|
+| Anthropic, *Building Effective Agents* | Single master loop ownership; framework only when the graph shape genuinely benefits. |
+| OpenJarvis (design pattern) | Three execution modes — on-demand HTTP / scheduled cron / continuous (Drive `changes.watch` flagged but not shipped). |
+| Hermes (single-loop ReAct) | The CRAG-lite loop in `agent/crag.py`. |
+| OpenClaw (workflow shape) | The 7-stage proposal pipeline in `agent/proposal_pipeline.py`. |
+| agentskills.io v1 spec | The 5 YAML manifests under `src/klerk/agent/skills/`. |
+| LangGraph | Used in **one** place — the Conflict Reporter spine — because it's the only flow where state between LLM calls + per-node tracing + checkpointing all matter together. |
+
+## Eval at a glance
+
+20 questions distributed as 8 factual / 5 multi-hop / 3 conflict /
+2 Bahasa / 2 trick. Trick items must trigger an "I don't have that
+information" response — hallucinating with any confidence is a fail.
+Full methodology, the 5-axis rubric, judge-bias disclosure, and per-Q
+table in [EVAL.md](EVAL.md).
 
 ```bash
-# clone + install
-git clone https://github.com/yohn-maistre/document-intelligence-assistant
-cd document-intelligence-assistant
-make setup
-
-# point at the Nemotron proxy (LITELLM_KEY + CF_CLIENT_ID + CF_CLIENT_SECRET)
-cp .env.example .env  &&  $EDITOR .env
-
-# index the bundled seed corpus (3 docs, 40% Bahasa, cross-doc facts seeded)
-uv run klerk index build --src data/seed --rebuild
-
-# extract a KG, scan for contradictions, build an FAQ
-uv run klerk kg extract --rebuild
-uv run klerk contradict scan
-uv run klerk faq build
-
-# adversarial proposal
-uv run klerk propose "Q1 budget variance — consultant spend + parental leave coverage" -n 3
-
-# eval
-uv run klerk eval run
-cat data/output/eval/rubric.json | jq '.aggregate'
-
-# operator TUI
-uv run klerk studio
-
-# MCP gateway (for Claude Desktop / Goose / Cursor / Pi)
-uv run klerk-mcp
+klerk synth check                            # corpus plan satisfies the brief
+klerk synth gen                              # generate the 30-doc corpus
+klerk index build --src data/synth/fata_organa --rebuild
+klerk eval run --ragas --rubric              # → data/output/eval/*.json
 ```
 
-## Demo queries (canned, against the seed corpus)
+## Limitations + honest notes
 
-| Mode | Query | What it exercises |
-|---|---|---|
-| Bahasa single-doc | `klerk ask "Berapa tarif konsultan advisory PT Pelangi per jam?" --locale id` | Bahasa retrieval + citation |
-| EN multi-hop | `klerk ask "Why did Q1 consultant spend overrun by 29% — was it rate or volume?"` | Multi-hop across HR policy + memo + contract |
-| CRAG trigger | `klerk ask "What's the contingency budget recommendation?"` | Underspecified — forces a corrective re-query |
-| Adversarial proposal | `klerk propose "Pelangi IP-clause renegotiation" -n 3` | Drafter-A vs Drafter-B → Adjudicator → Critic |
-| Anomaly | drop a non-fit doc into `data/raw/`, then `klerk bg start --once && klerk anomaly scan` | Outlier detection + LLM justification |
+- **CF Access token expiry**: the LiteLLM virtual key is valid for 90
+  days from 2026-05-28 — expires ~2026-08-26. Rotation steps in
+  `.env.example`.
+- **First-time container cold start** fetches ~1.2GB of BGE-M3 weights
+  unless the Docker image was built ahead. Multi-stage build pre-bakes
+  the weights so subsequent runs are instant.
+- **Drive bootstrap** of 25-30 docs runs 60-90s; client polls
+  `GET /ingest/runs/{run_id}` to track.
+- **LLM-as-judge bias**: the `citation_grounded` and `confidence` axes
+  use the same `nemotron-3-nano-omni` that generated the answer —
+  absolute scores ~10-15% inflated, per-category deltas reliable. See
+  [EVAL.md](EVAL.md) §3.
+- **Bahasa coverage** in the corpus is 4/30 docs — meets the ≥3 floor.
+  The Nemotron model is multilingual but Bahasa quality on long-tail
+  policy language hasn't been independently benchmarked.
+
+## Hardware
+
+| Need | Spec |
+|------|------|
+| RAM  | ~4GB peak (BGE-M3 fp32 + torch + the API). 8GB recommended. |
+| CPU  | Any x86_64 / aarch64 with manylinux wheels. Tested under Linux 6.x. |
+| GPU  | Not required. Set `KLERK_EMBED_DEVICE=cuda:0` for an ~8× speed-up on retrieval / rerank if available. |
+| Disk | ~3.5GB image (Python + torch + BGE-M3 weights pre-baked) + LanceDB + cache. |
+| Network | Outbound HTTPS to the Nemotron proxy (`llm-proxy.atlas-horizon.com`) and Drive API. |
+
+## Repo layout
+
+```
+.
+├── src/klerk/
+│   ├── api/server.py            FastAPI surface (9 routes + middleware)
+│   ├── llm/                     LiteLLM + Nemotron + cache
+│   ├── drive/sync.py            Service Account incremental sync
+│   ├── rag/                     chunker / embed / store / retrieve / rerank
+│   ├── agent/                   escalation / action_items / drift / writer
+│   ├── agent/skills/            agentskills.io v1 YAML manifests
+│   ├── orchestrate/             LangGraph Conflict spine
+│   ├── scheduled/drift_runner.py APScheduler nightly drift
+│   ├── synth/                   Fata Organa corpus generator
+│   ├── eval/                    RAGAS + 5-axis rubric + golden loader
+│   ├── studio/                  Textual operator TUI
+│   ├── mcp/                     klerk-mcp gateway
+│   └── cli/                     Typer verbs
+├── tests/                       143 tests, all green
+├── evaluation_set.json          The brief's 20-question eval set
+├── EVAL.md                      Methodology + rubric + per-Q table
+├── DATA_GENERATION.md           Corpus generation methodology
+├── HANDOFF.md                   Internal handoff (planning state)
+├── docs/                        design-decisions.md + integrations/
+├── experimental/                Demoted components (TS shell, KG viz, …)
+├── frontend/streamlit_app.py    Deliberate stub — Textual is the chosen UI
+├── Dockerfile                   Multi-stage; pre-bakes BGE-M3 weights
+├── docker-compose.yml           One-command bring-up
+└── pyproject.toml               uv-managed; [scheduled] extra for drift runner
+```
 
 ## License
 
-MIT — see `pyproject.toml`. Pi (`@mariozechner/pi-coding-agent`) is its own thing; we depend on it via npm.
-
-## Acknowledgements
-
-- **Anthropic** — *Building Effective Agents* and *Dynamic Workflows* (May 2026) shape the entire stance behind klerk (own the loop, frameworks are commoditized, adversarial subagent verification).
-- **Mario Zechner** — Pi (`@mariozechner/pi-coding-agent`) gives klerk its chat TUI without a rewrite.
-- **NousResearch (Hermes Agent)** — the architectural pattern klerk copies (one tool layer, four surfaces, MCP as gateway).
-- **Cognee, LightRAG, HippoRAG 2, GraphRAG** — the production-scale answers klerk is a slimmer version of; see `docs/design-decisions.md` for the per-framework analysis.
-- **Singapore AI (SEA-HELM)** — the methodology klerk's Bahasa parity report extracts.
+MIT. The fictional Fata Organa Solusi spec, the synthetic corpus, and
+the evaluation set are purpose-built for this take-home and don't claim
+to represent any real organisation.
