@@ -133,7 +133,7 @@ def test_actions_extract_accepts_text_input(client, monkeypatch):
 
     monkeypatch.setattr(
         action_items,
-        "ask_json",
+        "ask_typed",
         lambda *a, **kw: ActionExtraction(
             items=[ActionItem(assignee="Yan", action="Review report", due="Friday")],
             source="text",

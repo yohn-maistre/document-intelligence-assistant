@@ -17,9 +17,9 @@ from pathlib import Path
 
 import networkx as nx
 
-from klerk.agent.llm_json import ask_json
+from klerk.agent.pai import ask_typed
 from klerk.agent.prompts.system import KG_EXTRACT_PROMPT
-from klerk.agent.schemas import Entity, ExtractedGraph, Relation
+from klerk.agent.schemas import ExtractedGraph
 
 
 def _kg_dir() -> Path:
@@ -48,7 +48,7 @@ def extract_chunk(chunk_id: str, text: str, *, locale: str = "en") -> ExtractedG
         f"PASSAGE:\n{text}\n\n"
         "Set every relation's `evidence_chunk` to the CHUNK_ID above."
     )
-    return ask_json(
+    return ask_typed(
         ExtractedGraph,
         system=KG_EXTRACT_PROMPT,
         user=user,

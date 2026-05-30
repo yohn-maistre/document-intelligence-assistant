@@ -19,7 +19,7 @@ from pathlib import Path
 import networkx as nx
 
 from klerk.agent.kg_extract import load_graph
-from klerk.agent.llm_json import ask_json
+from klerk.agent.pai import ask_typed
 from klerk.agent.prompts.system import CONTRADICTION_PROMPT
 from klerk.agent.schemas import ContradictionFinding
 from klerk.rag.store import CORPUS_TABLE, open_db
@@ -85,34 +85,51 @@ def scan(*, locale: str = "en") -> list[tuple[ConflictGroup, ContradictionFindin
     chunk_text = _chunk_text_index()
     results: list[tuple[ConflictGroup, ContradictionFinding]] = []
     for grp in groups:
-        statements = "\n".join(
-            f"- [{cid}] {chunk_text.get(cid, '(missing)')[:400]}"
-            for cid in grp.evidence_chunks
-        )
-        user = (
-            f"ENTITY OR RELATION: {grp.source} —[{grp.verb_stem}]→ {grp.target}\n"
-            f"STATEMENTS FROM DIFFERENT CHUNKS:\n{statements}\n"
-        )
-        try:
-            verdict = ask_json(
-                ContradictionFinding,
-                system=CONTRADICTION_PROMPT,
-                user=user,
-                locale=locale,
-                max_tokens=400,
-            )
-        except Exception as e:  # noqa: BLE001
-            verdict = ContradictionFinding(
-                consistent=True,
-                contradiction=f"(scan error: {type(e).__name__}: {e})",
-                involved_chunks=grp.evidence_chunks,
-                entity_or_relation=f"{grp.source} →[{grp.verb_stem}]→ {grp.target}",
-            )
-        # Always tag the entity / relation for the report
-        verdict.entity_or_relation = f"{grp.source} →[{grp.verb_stem}]→ {grp.target}"
+        verdict = judge_pair(grp, chunk_text, locale=locale)
         if not verdict.consistent or verdict.contradiction:
             results.append((grp, verdict))
     return results
+
+
+def judge_pair(
+    grp: ConflictGroup,
+    chunk_text: dict[str, str],
+    *,
+    locale: str = "en",
+) -> ContradictionFinding:
+    """Ask the LLM whether one group's cross-chunk statements contradict.
+
+    Migrated to a PydanticAI `Agent(output_type=ContradictionFinding)`.
+    Survivable: a judge error becomes a flagged (consistent=True + error note)
+    finding rather than killing the scan. Always stamps `entity_or_relation`.
+    """
+    label = f"{grp.source} →[{grp.verb_stem}]→ {grp.target}"
+    statements = "\n".join(
+        f"- [{cid}] {chunk_text.get(cid, '(missing)')[:400]}"
+        for cid in grp.evidence_chunks
+    )
+    user = (
+        f"ENTITY OR RELATION: {grp.source} —[{grp.verb_stem}]→ {grp.target}\n"
+        f"STATEMENTS FROM DIFFERENT CHUNKS:\n{statements}\n"
+    )
+    try:
+        verdict = ask_typed(
+            ContradictionFinding,
+            system=CONTRADICTION_PROMPT,
+            user=user,
+            locale=locale,
+            max_tokens=400,
+        )
+    except Exception as e:  # noqa: BLE001
+        verdict = ContradictionFinding(
+            consistent=True,
+            contradiction=f"(scan error: {type(e).__name__}: {e})",
+            involved_chunks=grp.evidence_chunks,
+            entity_or_relation=label,
+        )
+    # Always tag the entity / relation for the report
+    verdict.entity_or_relation = label
+    return verdict
 
 
 def render_report(findings: list[tuple[ConflictGroup, ContradictionFinding]]) -> str:

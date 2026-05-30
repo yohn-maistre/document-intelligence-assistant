@@ -2538,7 +2538,7 @@ requires-dist = [
     { name = "openinference-instrumentation-litellm", specifier = ">=0.1.0" },
     { name = "opentelemetry-sdk", specifier = ">=1.27.0" },
     { name = "pydantic", specifier = ">=2.9" },
-    { name = "pydantic-ai", specifier = ">=0.0.20" },
+    { name = "pydantic-ai", specifier = ">=1.0" },
     { name = "pymupdf", specifier = ">=1.24.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.3.0" },
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.24.0" },

@@ -12,7 +12,7 @@ dependencies = [
     # LLM gateway + caching
     "litellm>=1.50.0",
     "diskcache>=5.6.3",
-    "pydantic-ai>=0.0.20",
+    "pydantic-ai>=1.0",
     "pydantic>=2.9",
 
     # Retrieval stack — BGE-M3 multi-head (dense + sparse + ColBERT) via
