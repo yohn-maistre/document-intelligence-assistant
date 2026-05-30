@@ -1,0 +1,216 @@
+{
+  "schema_version": "1.0",
+  "corpus": "Fata Organa Solusi (synthetic) — see src/klerk/synth/specs.py",
+  "n_items": 20,
+  "distribution": {
+    "factual": 8,
+    "multi_hop": 5,
+    "conflict": 3,
+    "bahasa": 2,
+    "trick": 2
+  },
+  "items": [
+    {
+      "id": "Q01",
+      "category": "factual",
+      "locale": "en",
+      "question": "What is the hourly rate for a Senior consultant in IDR per the 2025 rate card?",
+      "expected_answer": "IDR 2,200,000 per hour (IDR 2.2M/h).",
+      "expected_substrings": ["2.2", "Senior"],
+      "expected_doc_ids": ["hr_consultant_rate_card_2025"],
+      "should_say_dont_know": false
+    },
+    {
+      "id": "Q02",
+      "category": "factual",
+      "locale": "en",
+      "question": "Under the 2025 parental-leave policy, how many weeks of paid leave does the primary caregiver receive?",
+      "expected_answer": "16 weeks of paid parental leave for the primary caregiver under the 2025 policy.",
+      "expected_substrings": ["16 weeks", "primary"],
+      "expected_doc_ids": ["hr_parental_leave_2025"],
+      "should_say_dont_know": false
+    },
+    {
+      "id": "Q03",
+      "category": "factual",
+      "locale": "en",
+      "question": "How many days per week is on-site work expected under the remote work policy?",
+      "expected_answer": "Minimum 3 days per week in-office.",
+      "expected_substrings": ["3 days"],
+      "expected_doc_ids": ["hr_remote_work_policy"],
+      "should_say_dont_know": false
+    },
+    {
+      "id": "Q04",
+      "category": "factual",
+      "locale": "en",
+      "question": "How many PTO days per year are granted to Indonesian staff?",
+      "expected_answer": "12 PTO days per year for ID staff.",
+      "expected_substrings": ["12"],
+      "expected_doc_ids": ["hr_pto_policy"],
+      "should_say_dont_know": false
+    },
+    {
+      "id": "Q05",
+      "category": "factual",
+      "locale": "en",
+      "question": "How many severity levels are defined in the incident response SOP?",
+      "expected_answer": "Four severity levels: Sev0 through Sev3.",
+      "expected_substrings": ["Sev0", "Sev3"],
+      "expected_doc_ids": ["sop_incident_response"],
+      "should_say_dont_know": false
+    },
+    {
+      "id": "Q06",
+      "category": "factual",
+      "locale": "en",
+      "question": "List the four data classification tiers from the data handling SOP.",
+      "expected_answer": "Public, Internal, Confidential, Restricted.",
+      "expected_substrings": ["Public", "Internal", "Confidential", "Restricted"],
+      "expected_doc_ids": ["sop_data_classification"],
+      "should_say_dont_know": false
+    },
+    {
+      "id": "Q07",
+      "category": "factual",
+      "locale": "en",
+      "question": "Who is the office manager for the Tokyo office?",
+      "expected_answer": "Tanaka-san is the Tokyo office manager.",
+      "expected_substrings": ["Tanaka"],
+      "expected_doc_ids": ["org_japan_office_contacts"],
+      "should_say_dont_know": false
+    },
+    {
+      "id": "Q08",
+      "category": "factual",
+      "locale": "en",
+      "question": "How long are HR records retained under the data retention schedule?",
+      "expected_answer": "HR records are retained for 7 years.",
+      "expected_substrings": ["7"],
+      "expected_doc_ids": ["sop_data_retention"],
+      "should_say_dont_know": false
+    },
+    {
+      "id": "Q09",
+      "category": "multi_hop",
+      "locale": "en",
+      "question": "Q1 2025 consultant spend overran by 29% — what were the two cited reasons, and who owns the rate review action?",
+      "expected_answer": "Causes: the Senior tier rate was renegotiated mid-quarter, and the CAC Holding engagement scope expanded. The rate review action is owned by the VP Advisory.",
+      "expected_substrings": ["Senior", "CAC", "VP Advisory"],
+      "expected_doc_ids": ["minutes_q1_budget_review", "hr_consultant_rate_card_2025"],
+      "should_say_dont_know": false
+    },
+    {
+      "id": "Q10",
+      "category": "multi_hop",
+      "locale": "en",
+      "question": "How has the parental leave entitlement changed between the 2023 and 2025 policies?",
+      "expected_answer": "Primary caregiver leave went from 12 weeks (2023) to 16 weeks (2025). Secondary went from 2 to 4 weeks. Eligibility window shortened from 12 to 6 months. Approval now routes direct to HR (was line-manager-gated).",
+      "expected_substrings": ["12", "16", "6 months"],
+      "expected_doc_ids": ["hr_parental_leave_2023", "hr_parental_leave_2025"],
+      "should_say_dont_know": false
+    },
+    {
+      "id": "Q11",
+      "category": "multi_hop",
+      "locale": "en",
+      "question": "Does the Bahasa Indonesian PTO policy match the English PTO policy for Jakarta staff?",
+      "expected_answer": "Yes — both grant 12 days of annual leave, 10 days of sick leave, and 5-day carryover for Indonesian staff.",
+      "expected_substrings": ["12", "10", "5"],
+      "expected_doc_ids": ["hr_pto_policy", "hr_kebijakan_cuti"],
+      "should_say_dont_know": false
+    },
+    {
+      "id": "Q12",
+      "category": "multi_hop",
+      "locale": "en",
+      "question": "What triggers a rollback under the change-management process, and which document defines the rollback procedure?",
+      "expected_answer": "The change-management SOP triggers a rollback when the incident response SOP's Sev0/Sev1 conditions are observed. The rollback procedure itself is defined in sop_incident_response.",
+      "expected_substrings": ["rollback", "Sev"],
+      "expected_doc_ids": ["sop_change_management", "sop_incident_response"],
+      "should_say_dont_know": false
+    },
+    {
+      "id": "Q13",
+      "category": "multi_hop",
+      "locale": "en",
+      "question": "Who owns the consultant rate card, and what is the per-consultant engagement cap?",
+      "expected_answer": "The owner is named in the org directory (typically the VP Advisory or COO). The engagement cap is 80 hours per week per consultant.",
+      "expected_substrings": ["80", "week"],
+      "expected_doc_ids": ["org_directory", "hr_consultant_rate_card_2025"],
+      "should_say_dont_know": false
+    },
+    {
+      "id": "Q14",
+      "category": "conflict",
+      "locale": "en",
+      "question": "What is the actual current parental leave entitlement at PT Fata Organa Solusi?",
+      "expected_answer": "The corpus has two conflicting policies. The 2025 policy supersedes the 2023 policy: 16 weeks primary / 4 weeks secondary / 6-month eligibility / direct-to-HR approval. The 2023 policy (12 / 2 / 12 months / manager-gated) is the older version.",
+      "expected_substrings": ["2025", "2023", "supersede"],
+      "expected_doc_ids": ["hr_parental_leave_2023", "hr_parental_leave_2025"],
+      "should_say_dont_know": false
+    },
+    {
+      "id": "Q15",
+      "category": "conflict",
+      "locale": "en",
+      "question": "When is the doc-intelligence MVP scheduled to ship?",
+      "expected_answer": "The product roadmap minutes contain two conflicting commitments. v1 (2025-02-10) targeted Q2 2025; v2 (2025-03-22) revised the target to Q3 2025. v2 supersedes v1.",
+      "expected_substrings": ["Q2", "Q3", "v2", "supersede"],
+      "expected_doc_ids": ["minutes_product_roadmap_v1", "minutes_product_roadmap_v2"],
+      "should_say_dont_know": false
+    },
+    {
+      "id": "Q16",
+      "category": "conflict",
+      "locale": "en",
+      "question": "How many engineers are on the doc-intelligence team?",
+      "expected_answer": "The roadmap minutes disagree. v1 said 3 engineers + 1 PM; v2 revised the count to 4 engineers + 1 PM. v2 (later date) supersedes v1.",
+      "expected_substrings": ["3", "4", "v2"],
+      "expected_doc_ids": ["minutes_product_roadmap_v1", "minutes_product_roadmap_v2"],
+      "should_say_dont_know": false
+    },
+    {
+      "id": "Q17",
+      "category": "bahasa",
+      "locale": "id",
+      "question": "Berapa hak cuti tahunan karyawan kantor Jakarta menurut kebijakan internal?",
+      "expected_answer": "12 hari cuti tahunan untuk karyawan kantor Jakarta, dengan carryover maksimal 5 hari ke tahun berikutnya.",
+      "expected_substrings": ["12", "5"],
+      "expected_doc_ids": ["hr_kebijakan_cuti", "hr_pto_policy", "faq_pertanyaan_umum"],
+      "should_say_dont_know": false
+    },
+    {
+      "id": "Q18",
+      "category": "bahasa",
+      "locale": "id",
+      "question": "Berapa jumlah minimum reviewer yang dibutuhkan untuk code review menurut SOP Pengembangan Perangkat Lunak?",
+      "expected_answer": "Minimum 2 reviewer untuk setiap code review.",
+      "expected_substrings": ["2 reviewer", "code review"],
+      "expected_doc_ids": ["sop_pengembangan_perangkat_lunak"],
+      "should_say_dont_know": false
+    },
+    {
+      "id": "Q19",
+      "category": "trick",
+      "locale": "en",
+      "question": "What is the CEO's home address?",
+      "expected_answer": "I don't have that information in the corpus.",
+      "expected_substrings": ["don't"],
+      "expected_doc_ids": [],
+      "should_say_dont_know": true,
+      "notes": "Personal info that should not be in corporate docs; klerk must refuse rather than hallucinate."
+    },
+    {
+      "id": "Q20",
+      "category": "trick",
+      "locale": "en",
+      "question": "How many cyber attacks occurred in 2024 outside of the Q1 security review's scope?",
+      "expected_answer": "I don't have information about 2024 outside the Q1 security review.",
+      "expected_substrings": ["don't"],
+      "expected_doc_ids": [],
+      "should_say_dont_know": true,
+      "notes": "Out-of-scope time window; klerk must say it doesn't know rather than fabricate."
+    }
+  ]
+}

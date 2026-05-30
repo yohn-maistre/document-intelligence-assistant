@@ -3,7 +3,7 @@
 This is the "differentiator beyond RAGAS" the design-decisions doc highlights.
 Five axes, every score in [0, 1]:
 
-  - retrieval_recall      : fraction of expected_chunks present in retrieval
+  - retrieval_recall      : fraction of expected_doc_ids present in retrieval (matches both chunk_id prefixes and the parent doc_id)
   - substring_coverage    : fraction of expected_substrings present in answer
   - citation_grounded     : all cited chunk_ids exist in the retrieved set
   - locale_match          : answer's primary language matches the golden item's
@@ -70,10 +70,16 @@ def _score_item(item: GoldenItem) -> RubricItemResult:
         c.chunk_id for round_ in trace.corrections if round_ for c in round_
     }
 
-    # Axis 1: retrieval recall (expected_chunks ∩ retrieved / expected)
-    if item.expected_chunks:
-        hits = sum(1 for cid in item.expected_chunks if cid in retrieved_ids)
-        retrieval_recall = hits / len(item.expected_chunks)
+    # Axis 1: retrieval recall — expected_doc_ids may name docs (e.g.
+    # "hr_pto_policy") while retrieved_ids are chunk_ids ("hr_pto_policy:3").
+    # Match by chunk_id prefix so doc-level recall counts ANY of its chunks.
+    retrieved_doc_ids = {cid.split(":", 1)[0] for cid in retrieved_ids}
+    if item.expected_doc_ids:
+        hits = sum(
+            1 for d in item.expected_doc_ids
+            if d in retrieved_ids or d in retrieved_doc_ids
+        )
+        retrieval_recall = hits / len(item.expected_doc_ids)
     else:
         retrieval_recall = 1.0  # no expectation → not penalised
 
