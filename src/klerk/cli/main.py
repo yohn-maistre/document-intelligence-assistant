@@ -51,6 +51,12 @@ from klerk.cli import drive_cmd, index_cmd, search_cmd, kg_cmd  # noqa: E402
 
 app.command("parse", help="Parse one file (Docling / native / PyMuPDF fallback).")(parse_cmd)
 
+# synth subcommands
+from klerk.cli.synth_cmd import check_cmd as synth_check_cmd, gen_cmd as synth_gen_cmd  # noqa: E402
+
+synth_app.command("gen", help="Generate the 28-doc Fata Organa corpus.")(synth_gen_cmd)
+synth_app.command("check", help="Verify the corpus plan satisfies the brief.")(synth_check_cmd)
+
 # index subcommands
 index_app.command("build", help="Parse + chunk + embed + upsert.")(index_cmd.build)
 index_app.command("stats", help="Show current corpus stats.")(index_cmd.show_stats)
