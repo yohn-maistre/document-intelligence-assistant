@@ -149,3 +149,78 @@ The whole table flips at:
 - **Beyond simple multi-hop** → revisit HippoRAG 2 once it exits alpha and adds LanceDB support, or Path-RAG
 
 The `docs/2026-landscape.md` doc captures the broader field so the migration paths above are concrete.
+
+---
+
+## v5 supplement — what changed after the v4 reasoning above
+
+The sections below are appended (not rewritten) so the v3/v4 evolution
+stays readable. v5 ships with the v4 stack plus these refinements:
+
+### v5-1. Reranker collapsed into BGE-M3's ColBERT head
+
+The v4 stack table lists `BGE-Reranker-v2-m3` as the cross-encoder. v5
+drops that separate model load entirely. BGE-M3 is a three-headed model
+(dense + sparse + ColBERT) — the ColBERT (multi-vector late-interaction)
+head rivals a separate cross-encoder on benchmarks. One model file, one
+load, ~1GB lighter container, no quality regression.
+
+Mechanics: at rerank time we score passages with the MaxSim formula
+    `score(Q, D) = Σ_{q ∈ Q} max_{d ∈ D} cosine(q, d)`
+over the token-level vectors that BGE-M3 returns when
+`return_colbert_vecs=True`. Implementation: `src/klerk/rag/rerank.py`.
+
+### v5-2. Vision-language embedders explored, not shipped
+
+We evaluated four multimodal embedders that would have collapsed
+parser + embed + rerank into ONE component (the "page-image-embed
+straight into an omnimodal LLM" path):
+
+| Candidate                          | Params | Multilingual                    | License            | Killed by |
+|------------------------------------|-------:|---------------------------------|--------------------|-----------|
+| ColPali                            | ~3B    | Limited (EN/FR-heavy)           | MIT                | Bahasa + JP unbenchmarked. |
+| ColQwen2.5-3b-multilingual         | ~3B    | Better but EN-heavy data        | Apache 2.0         | Bahasa+JP coverage gap; CPU multi-vector ~800ms/page (5-10× slower than text-native). |
+| Jina-embeddings-v4                 | ~3.8B  | Strong on general multilingual  | Apache 2.0         | Tables degrade to page blobs — hurts structured action-item extraction and table-grounded queries. |
+| NVIDIA `omni-embed-nemotron-3b`    | ~3B    | Strong                          | OneWay **Noncommercial** | License disqualifies for a commercial take-home — interesting because it's the multimodal cousin of our chat model. |
+
+Decision: stay with BGE-M3 text-native + LanceDB hybrid + ColBERT rerank
+(see v5-1). Revisit when (a) corpus becomes figure-heavy and the table
+problem stops being load-bearing, or (b) Bahasa/JP gains benchmark
+coverage on multimodal embedders.
+
+### v5-3. LangGraph for the Conflict Reporter only
+
+The v4 table didn't show LangGraph anywhere. v5 wires it for **one**
+capability — the Conflict Reporter (C) — as a 4-node `StateGraph`:
+`retrieve_docs → pair_facts → judge_conflict → format_report`. Every
+other agent (CRAG, escalation, action items, writer, drift) is
+single-loop Python.
+
+Why one flow gets the graph: the Conflict Reporter benefits from
+per-node tracing (the only LLM call is `judge_conflict`; the others
+are deterministic prep / format) and from `LangGraph`'s checkpointer
+hook for resumability of long scans. The rest don't.
+
+Shipping LangGraph for one demonstrable flow signals "we know when
+graph vs loop is the right shape" — over-applying it would signal the
+opposite. Implementation: `src/klerk/orchestrate/conflict_graph.py`.
+
+### v5-4. Outdated rows in the v4 stack table
+
+The following rows in §"Stack — what we picked and why" reflect the
+v4 plan and have changed:
+
+- **Reranker**: `BGE-Reranker-v2-m3` → BGE-M3 ColBERT head (see v5-1).
+- **Chat harness**: `klerk-cli (TS, Ink banner) + Pi as hidden runtime`
+  → demoted to `experimental/ts-shell/` (TS shell out of brief scope;
+  FastAPI surface is primary).
+- **Background ingestion**: `APScheduler + asyncio` in main deps →
+  moved to `[scheduled]` optional extra (Drift agent E re-imports it
+  narrowly via `src/klerk/scheduled/drift_runner.py`).
+- **LLM cache (semantic)**: LanceDB `llm_cache` table — still present
+  but the env-var defaults are removed from `.env.example` in v5 (the
+  code defaults still work; semantic cache is unchanged behaviourally).
+
+The other rows (LanceDB hybrid, BGE-M3 dense, NetworkX KG, Docling
+parser, DiskCache exact cache, Phoenix observability, MCP gateway,
+custom rubric) carry through unchanged from v4 to v5.
