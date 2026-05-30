@@ -8,7 +8,7 @@ Endpoints (see HANDOFF.md section 7 step 2):
   GET  /sync-status             last Drive sync state + counts
   POST /actions/extract         action-item extraction       (step 7: full agent)
   POST /conflicts/scan          cross-doc contradiction sweep
-  POST /draft                   multi-drafter adversarial proposal
+  POST /draft                   multi-drafter adversarial doc-writer
   GET  /drift/recent            last N drift events from .klerk/drift-events.jsonl
   POST /drift/scan              trigger a fresh drift scan   (step 7: full agent)
 
@@ -412,7 +412,7 @@ def _wire_conflicts(app: FastAPI) -> None:
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# /draft — multi-drafter adversarial proposal
+# /draft — multi-drafter adversarial doc-writer
 # ═══════════════════════════════════════════════════════════════════════════
 def _wire_draft(app: FastAPI) -> None:
     @app.post("/draft", response_model=DraftResponse, tags=["agents"])
@@ -420,8 +420,8 @@ def _wire_draft(app: FastAPI) -> None:
         # Route through the writer façade (step 7) so the internal Proposal
         # type doesn't leak into the API layer. The full per-section trace
         # (drafter-A / drafter-B / adjudication) is still reachable via the
-        # internal proposal_pipeline.propose() if needed.
-        from klerk.agent.proposal_pipeline import propose
+        # internal doc_writer.propose() if needed.
+        from klerk.agent.doc_writer import propose
 
         proposal = await asyncio.to_thread(
             propose,

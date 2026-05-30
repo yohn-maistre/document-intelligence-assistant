@@ -46,7 +46,7 @@
 
 | Surface | Role | Who uses it |
 |---|---|---|
-| **Typer CLI verbs** | Primary brand. `klerk ask`, `klerk propose`, `klerk synth gen`, `klerk eval run`, ... | Humans + agents (`--json`) |
+| **Typer CLI verbs** | Primary brand. `klerk ask`, `klerk write`, `klerk synth gen`, `klerk eval run`, ... | Humans + agents (`--json`) |
 | **klerk-cli chat shell** | Ink-wrapped chat REPL; Pi runs hidden underneath | Humans |
 | **MCP gateway** (`klerk-mcp`) | Stdio MCP server exposing the tool surface | Other agents (Claude Desktop, Goose, Cursor, another Pi) |
 | **Studio TUI** (`klerk studio`) | Textual operator panel; 5 panels | Operators / debugging |
@@ -60,7 +60,7 @@
 | **NetworkX KG (JSON)** | Entities + relations extracted via Pydantic AI structured output | `data/kg/graph.json` |
 | **Phoenix SQLite** | OpenInference traces; powers the Studio Trace panel + replay | `.phoenix/phoenix.db` |
 | **DiskCache** | Exact-match LLM cache (prompt hash → response) | `.diskcache/` |
-| **SQLite checkpoint** | Mid-run resumability for `klerk propose` | `.klerk/checkpoints.db` |
+| **SQLite checkpoint** | Mid-run resumability for `klerk write` (doc-writer graph) | `.klerk/checkpoints.db` |
 
 LanceDB does double duty: corpus retrieval + semantic LLM cache. One primitive, two roles.
 

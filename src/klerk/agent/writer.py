@@ -1,11 +1,11 @@
-"""Capability D — Writer (multi-drafter adversarial proposal).
+"""Capability D — Writer (multi-drafter adversarial doc-writer).
 
-Thin façade over `klerk.agent.proposal_pipeline` that maps the internal
-`Proposal` dataclass to the public `WriterDraftSummary` Pydantic model.
-The actual A/B drafting + adjudication + 5-axis critic logic stays in
-proposal_pipeline; this module exists so the FastAPI surface, the Studio
-"Drafts" panel, and any future skill manifest all reach the writer
-through one stable signature.
+Thin façade over `klerk.agent.doc_writer` that maps the internal `Proposal`
+dataclass to the public `WriterDraftSummary` Pydantic model. The actual A/B
+drafting + adjudication + 5-axis critic logic stays in doc_writer (arranged
+as a LangGraph spine in doc_writer_graph); this module exists so the FastAPI
+surface, the Studio "Drafts" panel, and the skill manifest all reach the
+writer through one stable signature.
 """
 
 from __future__ import annotations
@@ -13,7 +13,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from klerk.agent._models import WriterDraftSummary, WriterSection
-from klerk.agent.proposal_pipeline import Proposal, propose
+from klerk.agent.doc_writer import Proposal, propose
 
 
 def _to_public(proposal: Proposal) -> WriterDraftSummary:

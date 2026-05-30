@@ -1,4 +1,4 @@
-"""`klerk propose "<topic>"` — adversarial proposal pipeline."""
+"""`klerk write "<topic>"` — adversarial multi-drafter doc-writer."""
 
 from __future__ import annotations
 
@@ -11,28 +11,37 @@ from rich.panel import Panel
 from rich.rule import Rule
 from rich.table import Table
 
-from klerk.agent.proposal_pipeline import propose, save_proposal
+from klerk.agent.doc_writer import propose, save_proposal
 
 console = Console()
 
 
-def propose_cmd(
-    topic: Annotated[str, typer.Argument(help="Proposal topic.")],
+def write_cmd(
+    topic: Annotated[str, typer.Argument(help="Document topic.")],
     sections: Annotated[int, typer.Option("--sections", "-n", help="Number of sections.")] = 3,
     k: Annotated[int, typer.Option("--k", "-k", help="Evidence chunks per section.")] = 8,
     locale: Annotated[str, typer.Option("--locale", "-l")] = "en",
     out_dir: Annotated[Path, typer.Option("--out", help="Output dir for the .md file.")] = Path("data/output/proposals"),
+    run_id: Annotated[str | None, typer.Option("--run-id", help="Stable run id for checkpoint/resume.")] = None,
+    resume: Annotated[bool, typer.Option("--resume", help="Return the checkpointed doc for --run-id instead of re-running.")] = False,
 ) -> None:
     """Researcher → Scope → Drafter-A‖Drafter-B → Citation Tracer → Adjudicator → Critic."""
+    if resume and not run_id:
+        console.print("[red]--resume requires --run-id[/red]")
+        raise typer.Exit(code=1)
     console.print(
         Panel.fit(
-            f"[bold cyan]klerk propose[/bold cyan]: {topic}\n"
-            f"[dim]sections={sections}  k={k}  locale={locale}[/dim]",
+            f"[bold cyan]klerk write[/bold cyan]: {topic}\n"
+            f"[dim]sections={sections}  k={k}  locale={locale}"
+            f"{'  (resume ' + run_id + ')' if resume else ''}[/dim]",
             border_style="cyan",
         )
     )
 
-    proposal = propose(topic, n_sections=sections, k_per_section=k, locale=locale)
+    proposal = propose(
+        topic, n_sections=sections, k_per_section=k, locale=locale,
+        run_id=run_id, resume=resume,
+    )
 
     console.print(Rule("[bold]Adjudication summary[/bold]", style="dim"))
     table = Table(border_style="dim")
@@ -69,4 +78,4 @@ def propose_cmd(
         )
 
     path = save_proposal(proposal, out_dir=out_dir)
-    console.print(f"\n[green]✓[/green] Proposal written: [cyan]{path}[/cyan]")
+    console.print(f"\n[green]✓[/green] Document written: [cyan]{path}[/cyan]")

@@ -59,7 +59,7 @@ The brief asks for ≥1 from menu A/B/C; we ship all five plus E:
 | A  | Escalation Drafter — routes a low-confidence question to the right human owner with a structured email draft | inline `/chat` event when confidence < 0.3 | `src/klerk/agent/escalation.py` |
 | B  | Action Item Extractor — pulls (assignee, action, due, priority, source_chunk) from a doc or text | `POST /actions/extract` | `src/klerk/agent/action_items.py` |
 | C  | Conflict Reporter — cross-doc contradiction sweep through a 4-node LangGraph StateGraph | `POST /conflicts/scan` | `src/klerk/orchestrate/conflict_graph.py` |
-| D  | Writer — adversarial multi-drafter proposal pipeline (Drafter-A + Drafter-B + Adjudicator + Critic) | `POST /draft` | `src/klerk/agent/writer.py` + `proposal_pipeline.py` |
+| D  | Writer — adversarial multi-drafter doc-writer (Drafter-A + Drafter-B + Adjudicator + Critic), LangGraph fan-out | `POST /draft` · `klerk write` | `src/klerk/agent/writer.py` + `doc_writer.py` + `doc_writer_graph.py` |
 | E  | Drift Detector — scheduled corpus diff (doc_added / doc_changed / doc_removed / scope_drift) | `GET /drift/recent` + `POST /drift/scan` | `src/klerk/agent/drift.py` + `src/klerk/scheduled/drift_runner.py` |
 
 Each capability ships an agentskills.io v1 YAML manifest under
@@ -157,7 +157,7 @@ for the reranker collapse and the vision-language embedder evaluation.
 | Anthropic, *Building Effective Agents* | Single master loop ownership; framework only when the graph shape genuinely benefits. |
 | OpenJarvis (design pattern) | Three execution modes — on-demand HTTP / scheduled cron / continuous (Drive `changes.watch` flagged but not shipped). |
 | Hermes (single-loop ReAct) | The CRAG-lite loop in `agent/crag.py`. |
-| OpenClaw (workflow shape) | The 7-stage proposal pipeline in `agent/proposal_pipeline.py`. |
+| OpenClaw (workflow shape) | The 7-stage doc-writer in `agent/doc_writer.py` (LangGraph spine in `agent/doc_writer_graph.py`). |
 | agentskills.io v1 spec | The 5 YAML manifests under `src/klerk/agent/skills/`. |
 | LangGraph | Used in **one** place — the Conflict Reporter spine — because it's the only flow where state between LLM calls + per-node tracing + checkpointing all matter together. |
 

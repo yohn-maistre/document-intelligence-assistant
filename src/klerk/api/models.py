@@ -98,7 +98,7 @@ class ConflictReport(BaseModel):
     generated_at: datetime
 
 
-# ─── Draft (Option D — Writer; wired now via proposal_pipeline.py) ───────────
+# ─── Draft (Option D — Writer; wired via doc_writer.py + doc_writer_graph.py) ─
 class DraftRequest(BaseModel):
     topic: str = Field(..., min_length=1, max_length=500)
     n_sections: int = Field(default=3, ge=1, le=8)

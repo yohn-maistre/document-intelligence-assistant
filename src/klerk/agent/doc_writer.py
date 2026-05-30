@@ -16,6 +16,13 @@ The headline 2026-paradigm extract is the parallel A/B drafters + adjudicator.
 Drafters write competing sections grounded in the same retrieved chunks; the
 adjudicator picks the stronger one; the critic scores the winner against the
 klerk custom rubric.
+
+This module holds the individual stage functions plus the sequential
+`propose()` orchestration. `klerk.agent.doc_writer_graph` arranges the same
+stages as an explicit LangGraph StateGraph (parallel drafters as a graph
+fan-out, durable per-run checkpoints); `propose()` delegates to that graph.
+The public façade for the API / Studio / skill manifest is
+`klerk.agent.writer.write_draft`.
 """
 
 from __future__ import annotations
@@ -236,41 +243,15 @@ def score_rubric(
     )
 
 
-# ─── End-to-end orchestration ────────────────────────────────────────────────
-def propose(
-    topic: str,
+# ─── Assembly (shared by sequential + graph paths) ───────────────────────────
+def assemble_proposal(
     *,
-    n_sections: int = 3,
-    k_per_section: int = 8,
-    locale: str = "en",
+    topic: str,
+    locale: str,
+    scope: ProposalScope,
+    rounds: list[SectionRound],
 ) -> Proposal:
-    """One end-to-end proposal run. Returns the assembled Proposal."""
-    scope = plan_scope(topic, n_sections=n_sections, locale=locale)
-
-    rounds: list[SectionRound] = []
-    for section in scope.sections:
-        chunks = gather_evidence(section, k=k_per_section)
-        draft_a, draft_b = draft_competing(section, chunks, locale=locale)
-        cite_a = trace_citations(draft_a, chunks)
-        cite_b = trace_citations(draft_b, chunks)
-        adj = adjudicate(section, draft_a, draft_b, locale=locale)
-        winning = draft_a if adj.winner == "A" else draft_b
-        cite_check = cite_a if adj.winner == "A" else cite_b
-        rubric = score_rubric(section, winning, chunks, cite_check, locale=locale)
-        rounds.append(
-            SectionRound(
-                section=section,
-                retrieved=chunks,
-                draft_a=draft_a,
-                draft_b=draft_b,
-                adjudication=adj,
-                rubric=rubric,
-                cite_check_a=cite_a,
-                cite_check_b=cite_b,
-            )
-        )
-
-    # Section-mean rubric for the summary footer
+    """Wrap completed section rounds into a Proposal with a section-mean rubric."""
     if rounds:
         avg = RubricScores(
             faithfulness=sum(r.rubric.faithfulness for r in rounds) / len(rounds),
@@ -282,8 +263,35 @@ def propose(
         )
     else:
         avg = None
-
     return Proposal(topic=topic, locale=locale, scope=scope, rounds=rounds, summary_rubric=avg)
+
+
+# ─── End-to-end orchestration ────────────────────────────────────────────────
+def propose(
+    topic: str,
+    *,
+    n_sections: int = 3,
+    k_per_section: int = 8,
+    locale: str = "en",
+    run_id: str | None = None,
+    resume: bool = False,
+) -> Proposal:
+    """One end-to-end doc-writer run. Returns the assembled Proposal.
+
+    Delegates to the LangGraph spine (`klerk.agent.doc_writer_graph`) so the
+    parallel A/B drafters run as a graph fan-out and each run is durably
+    checkpointed for `resume`. The per-stage functions above remain the unit
+    of composition (the graph nodes call straight into them)."""
+    from klerk.agent import doc_writer_graph
+
+    return doc_writer_graph.run(
+        topic,
+        n_sections=n_sections,
+        k_per_section=k_per_section,
+        locale=locale,
+        run_id=run_id,
+        resume=resume,
+    )
 
 
 def save_proposal(p: Proposal, out_dir: Path | None = None) -> Path:

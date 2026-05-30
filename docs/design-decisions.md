@@ -46,7 +46,7 @@ The May 2026 *Dynamic Workflows* paradigm (Claude Code, Opus 4.8) reinforces thi
 
 **Why we didn't adopt it**: in a take-home it signals *defaulted to scaffolding*. Anthropic's stance is explicit. Claude Code itself uses a single-threaded master loop. We hand-rolled klerk's loop (`agent/crag.py`, ~150 LOC) so a reviewer can read every state transition.
 
-**What we extracted**: the *idea* of a typed agent state machine. Our `agent/proposal_pipeline.py` flow (Researcher → Scope → Drafter-A ‖ Drafter-B → Citation Tracer → Adjudicator → Critic) is functionally a 7-node graph — we just spell it out in Python rather than declaring it via a framework.
+**What we extracted**: the *idea* of a typed agent state machine. Our `agent/doc_writer.py` flow (Researcher → Scope → Drafter-A ‖ Drafter-B → Citation Tracer → Adjudicator → Critic) is a 7-node graph — declared as a LangGraph `StateGraph` in `agent/doc_writer_graph.py` (parallel drafters as a fan-out edge) while the stage functions stay plain readable Python. We reach for LangGraph only where graph structure earns its keep (this flow + the conflict scanner); everything else stays a hand-rolled loop.
 
 **When LangGraph is the right answer**: persistence across server restarts, human-in-the-loop pauses, conditional branching across dozens of steps. Past ~10 stages or any of these requirements, hand-rolling becomes false economy.
 
@@ -132,7 +132,7 @@ We intentionally implemented these ourselves rather than importing them:
 | Reciprocal Rank Fusion | `rag/fusion.py` (~30 LOC) | The formula is 1/(k+rank). Importing a library is overkill and obscures the math. |
 | Recursive chunker | `rag/chunker.py` (~120 LOC) | Tokenizer-pluggable (tiktoken → transformers → char heuristic). Robust in restricted-network envs. |
 | CRAG-lite loop | `agent/crag.py` (~150 LOC) | Anthropic stance — we own the decompose → retrieve → judge → correct → answer flow. |
-| Adversarial proposal pipeline | `agent/proposal_pipeline.py` (~200 LOC) | The 7-stage flow with parallel A/B drafters + adjudicator is the headline 2026-paradigm extract. |
+| Adversarial doc-writer | `agent/doc_writer.py` + `agent/doc_writer_graph.py` (~200 LOC) | The 7-stage flow with parallel A/B drafters + adjudicator is the headline 2026-paradigm extract; arranged as a LangGraph fan-out with per-run SQLite checkpoints. |
 | 5-axis custom rubric | `eval/rubric.py` (~150 LOC) | The "differentiator beyond RAGAS." Deterministic, transparent, per-locale aggregatable. |
 | Contradiction scan | `agent/contradiction.py` (~120 LOC) | Verb-stem bucketing + per-group LLM consistency check. The cheap signal beats a knowledge-graph-aware framework here. |
 | Background ingestion | `agent/background.py` | APScheduler + asyncio, no Cognee/Letta/mem0 dep. |

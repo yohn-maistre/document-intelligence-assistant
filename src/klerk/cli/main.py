@@ -44,7 +44,7 @@ app.add_typer(kg_app)
 # ── Single-verb commands attached at top level ──
 from klerk.cli.parse_cmd import parse_cmd  # noqa: E402
 from klerk.cli.ask_cmd import ask_cmd  # noqa: E402
-from klerk.cli.propose_cmd import propose_cmd  # noqa: E402
+from klerk.cli.write_cmd import write_cmd  # noqa: E402
 from klerk.cli.contradict_cmd import scan_cmd as contradict_scan_cmd  # noqa: E402
 from klerk.cli.faq_cmd import build_cmd as faq_build_cmd  # noqa: E402
 from klerk.cli import drive_cmd, index_cmd, search_cmd, kg_cmd  # noqa: E402
@@ -221,15 +221,15 @@ def chat(
     console.print(
         Panel.fit(
             "[bold]klerk chat[/bold] is wired in h19.5–22.\n"
-            "Until then, use the verbs: [cyan]klerk ask[/cyan] / [cyan]klerk propose[/cyan].",
+            "Until then, use the verbs: [cyan]klerk ask[/cyan] / [cyan]klerk write[/cyan].",
             border_style="dim",
         )
     )
 
 
-# ─── Q&A and proposal verbs ──────────────────────────────────────────────────
+# ─── Q&A and doc-writer verbs ────────────────────────────────────────────────
 app.command("ask", help="Q&A over the corpus (CRAG-lite + citations).")(ask_cmd)
-app.command("propose", help="Adversarial proposal pipeline (Drafter-A vs Drafter-B + Adjudicator + Critic).")(propose_cmd)
+app.command("write", help="Adversarial doc-writer (Drafter-A vs Drafter-B + Adjudicator + Critic).")(write_cmd)
 
 
 def main() -> None:

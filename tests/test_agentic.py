@@ -1,6 +1,6 @@
 """Step-7 agentic capabilities — A (Escalation) / B (Action Items) /
-E (Drift). Capability D (Writer) is already exercised by the existing
-proposal_pipeline tests; here we just verify the Pydantic façade.
+E (Drift). Capability D (Writer) is already exercised by the doc_writer
+tests; here we just verify the Pydantic façade.
 
 LLM calls are mocked; the drift agent is exercised end to end against a
 synthetic LanceDB snapshot since the corpus + manifest tests don't need
@@ -335,7 +335,7 @@ def test_drift_writes_events_to_jsonl(drift_state, monkeypatch):
 # ─── Writer façade ───────────────────────────────────────────────────────────
 def test_writer_maps_internal_proposal_to_public_summary(monkeypatch):
     from klerk.agent import writer
-    from klerk.agent.proposal_pipeline import Proposal
+    from klerk.agent.doc_writer import Proposal, SectionRound
     from klerk.agent.schemas import (
         Adjudication,
         DraftedSection,
@@ -343,7 +343,6 @@ def test_writer_maps_internal_proposal_to_public_summary(monkeypatch):
         ProposalSection,
         RubricScores,
     )
-    from klerk.agent.proposal_pipeline import SectionRound
 
     fake_proposal = Proposal(
         topic="Q1 review",
