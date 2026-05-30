@@ -47,7 +47,7 @@ from klerk.cli.ask_cmd import ask_cmd  # noqa: E402
 from klerk.cli.propose_cmd import propose_cmd  # noqa: E402
 from klerk.cli.contradict_cmd import scan_cmd as contradict_scan_cmd  # noqa: E402
 from klerk.cli.faq_cmd import build_cmd as faq_build_cmd  # noqa: E402
-from klerk.cli import index_cmd, search_cmd, kg_cmd  # noqa: E402
+from klerk.cli import drive_cmd, index_cmd, search_cmd, kg_cmd  # noqa: E402
 
 app.command("parse", help="Parse one file (Docling / native / PyMuPDF fallback).")(parse_cmd)
 
@@ -64,6 +64,10 @@ search_app.command("hybrid", help="Hybrid: vector + BM25 + RRF + BGE-M3 ColBERT 
 kg_app.command("extract", help="Build the KG over every indexed chunk.")(kg_cmd.extract)
 kg_app.command("stats", help="Show KG entity/relation counts.")(kg_cmd.stats)
 kg_app.command("show", help="Print entities + relations (Rich panels).")(kg_cmd.show)
+
+# drive subcommands
+drive_app.command("sync", help="Bootstrap-or-incremental sync the Drive folder.")(drive_cmd.sync_cmd)
+drive_app.command("status", help="Show the persisted manifest + page-token snapshot.")(drive_cmd.status_cmd)
 
 # contradict + faq subcommand groups
 contradict_app = typer.Typer(name="contradict", help="Pairwise contradiction scan over the KG.", no_args_is_help=True)

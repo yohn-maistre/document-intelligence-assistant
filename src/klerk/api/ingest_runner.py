@@ -135,9 +135,8 @@ def _ingest_local_path(path: str) -> tuple[int, int]:
 
 
 def _ingest_drive(*, folder_id: str | None = None) -> tuple[int, int]:
-    """Drive ingest path. Scaffold only in step 2 — full impl in step 3."""
-    raise NotImplementedError(
-        "Drive ingest is scaffolded in step 2; the Service Account walk + "
-        "manifest diff + changes.list wiring lands in step 3. Use "
-        "source='path' for now, or wait for step 3."
-    )
+    """Drive ingest: sync the folder to a local dir, then walk + index it."""
+    from klerk.drive.sync import download_dir, sync as drive_sync
+
+    report = drive_sync(folder_id=folder_id)
+    return _ingest_local_path(report.download_dir)
