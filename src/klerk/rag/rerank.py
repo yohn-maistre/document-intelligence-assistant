@@ -15,10 +15,15 @@ Backends:
   - `mock` — Jaccard token overlap; bypasses HF for sandbox/CI use.
     Activated by KLERK_RERANK_BACKEND=mock OR by KLERK_EMBED_BACKEND=mock
     (so a single env-var flips the full pipeline into offline mode).
+
+Graceful degradation: when the embed backend has no ColBERT head (e.g.
+`KLERK_EMBED_BACKEND=remote`), `embed_with_colbert` raises RuntimeError and
+this module falls back to the upstream RRF fusion order instead of reranking.
 """
 
 from __future__ import annotations
 
+import logging
 import os
 import re
 from dataclasses import dataclass
@@ -29,6 +34,8 @@ from klerk.rag.embed import embed_with_colbert
 
 MODEL_NAME = "BAAI/bge-m3 (ColBERT head)"
 _WORD_RE = re.compile(r"\w+", re.UNICODE)
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -81,6 +88,9 @@ def rerank(
     Same input/output shape as the v4 cross-encoder reranker — the only
     difference is the scoring backend (BGE-M3 ColBERT MaxSim instead of a
     separate BGE-Reranker-v2-m3 model load).
+
+    When ColBERT vectors are unavailable (remote embed backend), the upstream
+    RRF fusion order is preserved instead of reranking.
     """
     if not passages:
         return []
@@ -88,9 +98,25 @@ def rerank(
     if _backend() == "mock":
         scores: list[float] = [_mock_score(query, p[text_key]) for p in passages]
     else:
-        q_colbert = embed_with_colbert([query])[0]
-        p_colberts = embed_with_colbert([p[text_key] for p in passages])
-        scores = [_maxsim(q_colbert, pv) for pv in p_colberts]
+        try:
+            q_colbert = embed_with_colbert([query])[0]
+            p_colberts = embed_with_colbert([p[text_key] for p in passages])
+            scores = [_maxsim(q_colbert, pv) for pv in p_colberts]
+        except RuntimeError as exc:
+            # Remote embed backend has no ColBERT head — preserve the upstream
+            # RRF fusion order instead of reranking. Synthetic descending
+            # scores keep ordering stable for downstream consumers.
+            logger.warning("rerank: ColBERT unavailable (%s); falling back to RRF order", exc)
+            fallback = [
+                RerankResult(
+                    chunk_id=p[id_key],
+                    text=p[text_key],
+                    score=float(len(passages) - i),
+                    original_rank=i + 1,
+                )
+                for i, p in enumerate(passages)
+            ]
+            return fallback[:top_k] if top_k is not None else fallback
 
     out = [
         RerankResult(
