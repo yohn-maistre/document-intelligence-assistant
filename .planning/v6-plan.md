@@ -574,3 +574,52 @@ Steps 1-11 from `HANDOFF.md` section 7. Branch
 Workspace MCP, Studio refactor, LangGraph conflict spine, agentic
 capabilities A/B/D/E, evaluation set + golden rewire, synth corpus
 generator, Dockerfile + compose, Drive incremental sync.
+
+### v6.1 — 2026-05-30 (Stack D pivot, post-cluster-4)
+
+**Trigger**: User reconsidered the Pi-as-2nd-surface positioning after
+cluster 4 (LangGraph orchestrator) shipped on the other session.
+Four-agent research sweep (Pi capabilities · Midday CLI pattern ·
+textual-serve · 2026 dashboard survey) reframed the architecture.
+
+**Findings (each agent)**:
+
+- **Pi**: NO subagents in core (philosophy). Flat tool loop. Tools can
+  shell out to anything. Clean `pi --mode rpc` JSONL stdio. TUI is
+  Node-only — cannot embed in Textual.
+- **Midday**: CLI-as-tool-contract pattern. Dual-mode binary
+  (`--agent` flag → JSON / no spinners / env-var auth). No harness
+  wraps the CLI; any agent shells out.
+- **textual-serve**: v1.1.3 viable for 5-panel dashboards; Textual v4
+  added LLM-streaming Markdown explicitly. Reference projects
+  (Harlequin / Posting / Dolphie) prove the visual ambition.
+- **Dashboards survey**: gold-standard is Hermes' React + xterm.js
+  wrapping the real TUI — textual-serve gives this for free. No
+  competitor ships a KG view → differentiation wedge. disler hook→WS
+  pattern is the activity-bus reference.
+
+**Architectural pivot** (Stack C → Stack D):
+
+- **Cluster 4 PRESERVED** as the brief's `/chat` surface (LangGraph
+  orchestrator). Not replaced.
+- **Pi 2nd surface** stays, but tools shell out to klerk CLI verbs
+  (Midday pattern) — NOT HTTP `/internal/*` endpoints. Drop the
+  `/internal/*` work from cluster 6.
+- **Studio dashboard** rebuilt as 5+ panel Bloomberg-terminal layout
+  (file explorer + chat + activity + graph + KG + eval + traces) with
+  muted cyberpunk-dark theme (Posting magenta + Dolphie cyan accents).
+- **Tool contract** = klerk CLI verbs with `--agent` flag. Two
+  surfaces, one tool layer, one subagent pool.
+
+**Scope change**: Cluster 5 plan replaced (5-panel Bloomberg, not
+5-stacked-rail). Cluster 6 plan rewritten (CLI shellout, not HTTP).
+Net work added: ~3h tonight if shipping the polished version; 0h
+deferred-to-next-week otherwise.
+
+**Full migration plan**: see `.planning/stack-d-migration.md` (phases
+0-5, tonight-vs-later split, decision log, file touch list, risks,
+sources).
+
+**What did NOT change**: clusters 1-4 stay as shipped. PydanticAI
+migration valid. doc_writer rename valid. Remote embed backend valid.
+Drive upload `--dry-run` valid.
