@@ -463,21 +463,17 @@ terminal-native chat.
 | B | LangGraph in Python only | ~6h; Python-end-to-end | Rejected on its own — Pi work already exists, throwing it away wastes the investment |
 | **C** | **LangGraph in Python + Pi as 2nd CLI surface** | **~22h; two surfaces, both native to their env** | **Locked** |
 
-Researched alternatives that did NOT change the decision:
+**Pi research summary** — confirmed via SDK inspection:
+`createAgentSession()`, built-in compaction + multi-session JSONL +
+branching/forking + 25+ provider support; ships in 4 modes (TUI /
+print-JSON / RPC / SDK). Explicitly rejects MCP per Mario's "No MCP"
+design stance ([blog](https://mariozechner.at/posts/2025-11-02-what-if-you-dont-need-mcp/)).
+The `@mariozechner/pi-coding-agent` package rebranded to
+`@earendil-works/*` (maintained by Mario Zechner + Armin Ronacher);
+we migrate to the new org as part of the promotion.
 
-- **Pi (`@mariozechner/pi-coding-agent`)** — confirmed via SDK
-  inspection: has `createAgentSession()`, built-in compaction +
-  multi-session JSONL + branching/forking + 25+ provider support; ships
-  in 4 modes (TUI / print-JSON / RPC / SDK). Explicitly rejects MCP
-  ("No MCP" design stance, [Mario's blog](https://mariozechner.at/posts/2025-11-02-what-if-you-dont-need-mcp/)).
-  Currently rebranded to `@earendil-works/*` — we migrate.
-- **Flue (`@flue/runtime` by Fred K. Schott)** — confirmed real,
-  v0.8.1 Apache-2.0, built on `@earendil-works/pi-agent-core`.
-  Headless TS framework with Cloudflare DO sessions. **Does not solve
-  the Python-Node bridge** — pure Node/Cloudflare, no Python client.
-  Pre-1.0 + headless = doesn't fit the polished-CLI-chat goal as well
-  as Pi. Open option for v7 if 2nd-surface use case shifts to
-  "deployable HTTP agent app".
+Full rationale + the list of rejected alternatives (Stack A, MinerU,
+semantic cache, etc.) lives in `.planning/v6-plan.md` "Decision log".
 
 ### 12.3 Architecture target
 
@@ -591,7 +587,6 @@ Substantially modified: `src/klerk/rag/{embed,rerank}.py`,
 
 - PydanticAI for the orchestrator (staying LangGraph in v6).
 - Pi as the primary orchestrator (Stack A) — Node sidecar tax.
-- Flue as a chat surface — pre-1.0, headless, doesn't solve Python bridge.
 - Remote ColBERT-aware rerank (Jina multi-vector + local MaxSim).
 - Quantised BGE-M3 (INT8 ONNX) as a third backend tier.
 - Drift as a routable tool (it's a background loop).
@@ -628,8 +623,8 @@ pnpm ls --depth 0 | grep earendil
 # start at cluster 1, step 1.1 (remote embed backend)
 ```
 
-The full work breakdown lives in `.planning/v6-plan.md` (local-only;
-`.planning/` is gitignored).
+The full work breakdown + decision log + changelog lives in
+`.planning/v6-plan.md` (committed alongside this handoff).
 
 ---
 
