@@ -73,6 +73,7 @@ kg_app.command("show", help="Print entities + relations (Rich panels).")(kg_cmd.
 
 # drive subcommands
 drive_app.command("sync", help="Bootstrap-or-incremental sync the Drive folder.")(drive_cmd.sync_cmd)
+drive_app.command("upload", help="Upload a corpus dir/file into Drive (supports --dry-run).")(drive_cmd.upload_cmd)
 drive_app.command("status", help="Show the persisted manifest + page-token snapshot.")(drive_cmd.status_cmd)
 
 # contradict + faq subcommand groups

@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import io
 import json
+import mimetypes
 import os
 import re
 from dataclasses import dataclass, field
@@ -28,6 +29,11 @@ from pathlib import Path
 from typing import Any
 
 DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.readonly"
+# Upload uses the narrower `drive.file` scope: the Service Account can only
+# see / touch files it created itself, so an upload typo can't reach the rest
+# of the reviewer's Drive. (Trade-off: skip-existing only sees prior klerk
+# uploads, which is exactly what we want for idempotent re-runs.)
+UPLOAD_SCOPE = "https://www.googleapis.com/auth/drive.file"
 
 # Native Drive types → export to formats Docling parses cleanly.
 EXPORT_MIME = {
@@ -128,8 +134,8 @@ def save_page_token(token: str) -> None:
 
 
 # ─── Drive API client ────────────────────────────────────────────────────────
-def _service():
-    """Build a Drive v3 client using the Service Account credentials."""
+def _build_service(scope: str):
+    """Build a Drive v3 client using the Service Account credentials at `scope`."""
     from google.oauth2 import service_account
     from googleapiclient.discovery import build
 
@@ -143,9 +149,19 @@ def _service():
         raise RuntimeError(f"GOOGLE_APPLICATION_CREDENTIALS file not found: {creds_path}")
 
     creds = service_account.Credentials.from_service_account_file(
-        creds_path, scopes=[DRIVE_SCOPE]
+        creds_path, scopes=[scope]
     )
     return build("drive", "v3", credentials=creds, cache_discovery=False)
+
+
+def _service():
+    """Read-only Drive client for sync/list/download."""
+    return _build_service(DRIVE_SCOPE)
+
+
+def _service_for_upload():
+    """Drive client scoped to `drive.file` for the upload verb."""
+    return _build_service(UPLOAD_SCOPE)
 
 
 # ─── List + token bootstrap ──────────────────────────────────────────────────
@@ -410,3 +426,135 @@ def sync(
         page_token=new_token,
         download_dir=str(root),
     )
+
+
+# ─── Upload (corpus → Drive) ─────────────────────────────────────────────────
+@dataclass
+class UploadResult:
+    """One file's upload outcome."""
+
+    path: str            # local source path
+    name: str            # name in Drive
+    file_id: str | None  # None when skipped or dry-run
+    status: str          # "uploaded" | "skipped" | "dry-run"
+
+
+@dataclass
+class UploadReport:
+    folder_id: str
+    dry_run: bool
+    results: list[UploadResult] = field(default_factory=list)
+
+    @property
+    def uploaded(self) -> list[UploadResult]:
+        return [r for r in self.results if r.status == "uploaded"]
+
+    @property
+    def skipped(self) -> list[UploadResult]:
+        return [r for r in self.results if r.status == "skipped"]
+
+
+def _guess_mime(path: Path) -> str:
+    mime, _ = mimetypes.guess_type(str(path))
+    return mime or "application/octet-stream"
+
+
+def list_uploaded_names(folder_id: str, *, service=None) -> dict[str, str]:
+    """Map `name → file_id` for files the SA already placed in `folder_id`.
+
+    Used for `--skip-existing`. With the `drive.file` scope the SA only sees
+    its own uploads, so this is naturally scoped to prior klerk runs.
+    """
+    svc = service or _service_for_upload()
+    out: dict[str, str] = {}
+    page_token: str | None = None
+    while True:
+        resp = svc.files().list(
+            q=f"'{folder_id}' in parents and trashed=false",
+            fields="nextPageToken,files(id,name)",
+            pageSize=200,
+            pageToken=page_token,
+            supportsAllDrives=True,
+            includeItemsFromAllDrives=True,
+        ).execute()
+        for f in resp.get("files", []):
+            out.setdefault(f["name"], f["id"])
+        page_token = resp.get("nextPageToken")
+        if not page_token:
+            break
+    return out
+
+
+def upload_file(
+    path: Path,
+    folder_id: str,
+    *,
+    service=None,
+    name: str | None = None,
+) -> str:
+    """Upload one local file into `folder_id`. Returns the new Drive file ID."""
+    from googleapiclient.http import MediaFileUpload
+
+    svc = service or _service_for_upload()
+    drive_name = name or path.name
+    metadata = {"name": drive_name, "parents": [folder_id]}
+    media = MediaFileUpload(str(path), mimetype=_guess_mime(path), resumable=True)
+    created = svc.files().create(
+        body=metadata,
+        media_body=media,
+        fields="id",
+        supportsAllDrives=True,
+    ).execute()
+    return created["id"]
+
+
+def upload_directory(
+    src: str | Path,
+    folder_id: str | None = None,
+    *,
+    glob: str = "*",
+    skip_existing: bool = True,
+    dry_run: bool = False,
+    service=None,
+) -> UploadReport:
+    """Upload files under `src` matching `glob` into the Drive `folder_id`.
+
+    - `dry_run=True` never calls the Drive API beyond the (read-only) listing
+      used for skip-existing; every result is marked `"dry-run"`.
+    - `skip_existing=True` skips files whose name already exists in the folder
+      (from a prior klerk upload).
+    """
+    folder_id = folder_id or os.environ.get("DRIVE_FOLDER_ID")
+    if not folder_id:
+        raise RuntimeError(
+            "upload: folder_id arg or DRIVE_FOLDER_ID env var required."
+        )
+    src_path = Path(src)
+    if not src_path.exists():
+        raise RuntimeError(f"upload: source path not found: {src_path}")
+
+    if src_path.is_file():
+        files = [src_path]
+    else:
+        files = sorted(p for p in src_path.glob(glob) if p.is_file())
+
+    existing: dict[str, str] = {}
+    if skip_existing and (files or not dry_run):
+        try:
+            existing = list_uploaded_names(folder_id, service=service)
+        except Exception:  # noqa: BLE001 - listing is best-effort for skip logic
+            existing = {}
+
+    report = UploadReport(folder_id=folder_id, dry_run=dry_run)
+    for path in files:
+        if skip_existing and path.name in existing:
+            report.results.append(
+                UploadResult(str(path), path.name, existing[path.name], "skipped")
+            )
+            continue
+        if dry_run:
+            report.results.append(UploadResult(str(path), path.name, None, "dry-run"))
+            continue
+        file_id = upload_file(path, folder_id, service=service)
+        report.results.append(UploadResult(str(path), path.name, file_id, "uploaded"))
+    return report
