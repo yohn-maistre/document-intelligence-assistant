@@ -5,15 +5,28 @@ from __future__ import annotations
 from typing import Annotated
 
 import typer
-from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
 from klerk.agent.contradiction import save_report, scan
+from klerk.cli._agent_flag import agent_console, emit, with_agent_mode
 
-console = Console()
+console = agent_console()
 
 
+def _findings_payload(findings) -> list[dict]:
+    return [
+        {
+            "relation": verdict.entity_or_relation,
+            "consistent": verdict.consistent,
+            "contradiction": verdict.contradiction,
+            "evidence_chunks": list(grp.evidence_chunks),
+        }
+        for grp, verdict in findings
+    ]
+
+
+@with_agent_mode
 def scan_cmd(
     locale: Annotated[str, typer.Option("--locale", "-l")] = "en",
 ) -> None:
@@ -28,6 +41,7 @@ def scan_cmd(
         console.print(Panel("No contradictions detected.", border_style="green"))
         path = save_report(findings)
         console.print(f"[dim]report: {path}[/dim]")
+        emit({"n_findings": 0, "report": str(path), "findings": []})
         return
 
     table = Table(title=f"{len(findings)} potential contradiction(s)", border_style="yellow")
@@ -46,3 +60,10 @@ def scan_cmd(
 
     path = save_report(findings)
     console.print(f"\n[green]✓[/green] Report written: [cyan]{path}[/cyan]")
+    emit(
+        {
+            "n_findings": len(findings),
+            "report": str(path),
+            "findings": _findings_payload(findings),
+        }
+    )

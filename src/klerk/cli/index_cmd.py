@@ -6,17 +6,18 @@ from pathlib import Path
 from typing import Annotated
 
 import typer
-from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.table import Table
 
+from klerk.cli._agent_flag import agent_console, emit, is_agent_mode, with_agent_mode
 from klerk.parse import parse
 from klerk.rag.chunker import chunk_text
 from klerk.rag.store import reset_corpus, stats, upsert_chunks
 
-console = Console()
+console = agent_console()
 
 
+@with_agent_mode
 def build(
     src: Annotated[Path, typer.Option("--src", "-s", help="Source directory of docs.")] = Path("data/seed"),
     rebuild: Annotated[bool, typer.Option("--rebuild", help="Drop existing corpus table first.")] = False,
@@ -35,13 +36,18 @@ def build(
     files = [p for p in sorted(src.rglob("*")) if p.is_file() and p.name != "README.md"]
     if not files:
         console.print(f"[yellow]No files found under {src}[/yellow]")
+        emit({"src": str(src), "total_chunks": 0, "by_doc": {}})
         raise typer.Exit(code=0)
 
     total_chunks = 0
     by_doc: dict[str, int] = {}
 
     with Progress(
-        SpinnerColumn(), TextColumn("{task.description}"), console=console, transient=True
+        SpinnerColumn(),
+        TextColumn("{task.description}"),
+        console=console._active(),  # noqa: SLF001 — real Console: stderr in agent mode
+        transient=True,
+        disable=is_agent_mode(),
     ) as prog:
         task = prog.add_task(f"Indexing {len(files)} file(s)...", total=None)
         for f in files:
@@ -76,13 +82,16 @@ def build(
         table.add_row(doc_id, str(n))
     table.add_row("[bold]TOTAL[/bold]", f"[bold]{total_chunks}[/bold]")
     console.print(table)
+    emit({"src": str(src), "total_chunks": total_chunks, "by_doc": by_doc})
 
 
+@with_agent_mode
 def show_stats() -> None:
     """Print current corpus stats."""
     s = stats()
     if s is None:
         console.print("[yellow]No corpus table yet — run `klerk index build` first.[/yellow]")
+        emit({"table": None, "rows": 0, "embed_dim": None, "fts_indexed": False})
         raise typer.Exit(code=0)
     table = Table(title="Index stats", show_header=False, border_style="dim")
     table.add_column("key", style="dim")
@@ -92,3 +101,11 @@ def show_stats() -> None:
     table.add_row("embed dim", str(s.embed_dim))
     table.add_row("FTS indexed", "yes" if s.fts_indexed else "no")
     console.print(table)
+    emit(
+        {
+            "table": s.table,
+            "rows": s.n_rows,
+            "embed_dim": s.embed_dim,
+            "fts_indexed": s.fts_indexed,
+        }
+    )

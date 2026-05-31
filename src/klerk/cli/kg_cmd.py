@@ -5,15 +5,16 @@ from __future__ import annotations
 from typing import Annotated
 
 import typer
-from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
 from klerk.agent import kg_extract
+from klerk.cli._agent_flag import agent_console, emit, with_agent_mode
 
-console = Console()
+console = agent_console()
 
 
+@with_agent_mode
 def extract(
     rebuild: Annotated[bool, typer.Option("--rebuild", help="Drop existing graph first.")] = False,
 ) -> None:
@@ -39,13 +40,22 @@ def extract(
     table.add_row("relations", str(stats_.n_relations))
     table.add_row("chunks processed", str(stats_.n_chunks_seen))
     console.print(table)
+    emit(
+        {
+            "entities": stats_.n_entities,
+            "relations": stats_.n_relations,
+            "chunks_seen": stats_.n_chunks_seen,
+        }
+    )
 
 
+@with_agent_mode
 def stats() -> None:
     """Print current KG stats."""
     s = kg_extract.stats()
     if s.n_entities == 0 and s.n_relations == 0:
         console.print("[yellow]Graph is empty — run `klerk kg extract` first.[/yellow]")
+        emit({"entities": 0, "relations": 0, "chunks_seen": 0, "empty": True})
         raise typer.Exit(code=0)
     table = Table(title="KG stats", show_header=False, border_style="dim")
     table.add_column("metric", style="dim")
@@ -54,6 +64,14 @@ def stats() -> None:
     table.add_row("relations", str(s.n_relations))
     table.add_row("chunks seen", str(s.n_chunks_seen))
     console.print(table)
+    emit(
+        {
+            "entities": s.n_entities,
+            "relations": s.n_relations,
+            "chunks_seen": s.n_chunks_seen,
+            "empty": False,
+        }
+    )
 
 
 def show(

@@ -5,14 +5,14 @@ from __future__ import annotations
 from typing import Annotated
 
 import typer
-from rich.console import Console
 from rich.table import Table
 
+from klerk.cli._agent_flag import agent_console, emit, with_agent_mode
 from klerk.rag.embed import embed_query
 from klerk.rag.retrieve import search_hybrid
 from klerk.rag.store import search_bm25, search_vector
 
-console = Console()
+console = agent_console()
 
 MAX_PREVIEW_CHARS = 220
 
@@ -24,6 +24,7 @@ def _preview(text: str) -> str:
     return text
 
 
+@with_agent_mode
 def bm25(
     query: Annotated[str, typer.Argument(help="Query string.")],
     k: Annotated[int, typer.Option("--k", "-k")] = 8,
@@ -31,8 +32,10 @@ def bm25(
     """BM25 search via LanceDB native FTS."""
     hits = search_bm25(query, k=k)
     _render(hits, title=f"BM25 ({len(hits)} hits)")
+    emit({"mode": "bm25", "query": query, "k": k, "hits": _hits_payload(hits)})
 
 
+@with_agent_mode
 def vector(
     query: Annotated[str, typer.Argument(help="Query string.")],
     k: Annotated[int, typer.Option("--k", "-k")] = 8,
@@ -41,8 +44,10 @@ def vector(
     qv = embed_query(query)
     hits = search_vector(qv, k=k)
     _render(hits, title=f"Vector ({len(hits)} hits)")
+    emit({"mode": "vector", "query": query, "k": k, "hits": _hits_payload(hits)})
 
 
+@with_agent_mode
 def hybrid(
     query: Annotated[str, typer.Argument(help="Query string.")],
     k: Annotated[int, typer.Option("--k", "-k")] = 8,
@@ -74,6 +79,38 @@ def hybrid(
             _preview(r.text),
         )
     console.print(table)
+    emit(
+        {
+            "mode": "hybrid",
+            "query": query,
+            "k": k,
+            "reranked": not no_rerank,
+            "results": [
+                {
+                    "chunk_id": r.chunk_id,
+                    "doc_id": getattr(r, "doc_id", None),
+                    "score": r.score,
+                    "vector_rank": r.vector_rank,
+                    "bm25_rank": r.bm25_rank,
+                    "locale": r.locale,
+                    "text": r.text,
+                }
+                for r in results
+            ],
+        }
+    )
+
+
+def _hits_payload(hits: list[dict]) -> list[dict]:
+    return [
+        {
+            "chunk_id": h.get("chunk_id"),
+            "doc_id": h.get("doc_id"),
+            "locale": h.get("locale"),
+            "text": h.get("text", ""),
+        }
+        for h in hits
+    ]
 
 
 def _render(hits: list[dict], *, title: str) -> None:
