@@ -93,7 +93,7 @@ class LiveChat(Container):
         self._answer_md: Markdown | None = None
         self._answer_buf = ""
         self._dirty = False
-        self._flush_timer: Any = None
+        self._last_render = 0.0
 
     def compose(self) -> ComposeResult:
         self.border_title = f"live chat · {self.mode}"
@@ -111,12 +111,6 @@ class LiveChat(Container):
     def _set_busy(self, busy: bool) -> None:
         """Toggle the one-row thinking spinner above the input."""
         self.query_one("#chat-loader").set_class(busy, "-busy")
-
-    def _stop_flush(self) -> None:
-        """Stop the streaming flush timer once a turn completes."""
-        if self._flush_timer is not None:
-            self._flush_timer.stop()
-            self._flush_timer = None
 
     @property
     def _log(self) -> VerticalScroll:
@@ -170,7 +164,18 @@ class LiveChat(Container):
             )
         elif event == "token":
             self._answer_buf += data.get("text", "")
-            self._dirty = True  # picked up by the throttled _flush_answer tick
+            await self._ensure_answer_md()
+            # Throttle: re-rendering Markdown re-parses the whole buffer (O(n²)),
+            # which lags on slow devices. Render at most ~10fps; the tail is
+            # always flushed on `done`/`error`, so no content is ever lost.
+            from time import monotonic
+
+            now = monotonic()
+            if now - self._last_render >= 0.1:
+                self._flush_answer()
+                self._last_render = now
+            else:
+                self._dirty = True
         elif event == "citations":
             cites = data.get("citations", [])
             conf = data.get("confidence", 0.0)
@@ -179,7 +184,6 @@ class LiveChat(Container):
         elif event == "done":
             self._set_busy(False)
             self._flush_answer()  # final render of any buffered tail
-            self._stop_flush()
             if self._answer_md is not None:
                 self._answer_md.remove_class("-streaming")
             await self._mount(
@@ -192,7 +196,6 @@ class LiveChat(Container):
         elif event == "error":
             self._set_busy(False)
             self._flush_answer()
-            self._stop_flush()
             if self._answer_md is not None:
                 self._answer_md.remove_class("-streaming")
             await self._mount(

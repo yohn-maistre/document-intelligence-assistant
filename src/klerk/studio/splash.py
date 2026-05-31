@@ -37,33 +37,36 @@ class SplashScreen(ModalScreen[None]):
         background: $background;
     }
     SplashScreen #logo {
-        color: $primary;
-        text-style: bold;
+        color: $secondary;
+        text-align: center;
     }
     SplashScreen #inventory {
-        color: $secondary;
+        text-align: center;
         margin-top: 1;
+        width: 64;
     }
     SplashScreen #hint {
         color: $text-muted;
-        margin-top: 1;
+        text-align: center;
+        margin-top: 2;
     }
     """
 
     def compose(self) -> ComposeResult:
-        tools = "  ".join(f"[b]{t}[/b]" for t in TOOLS)
+        tools = "  ".join(f"[$secondary]{t}[/]" for t in TOOLS)
         body = (
             f"{LOGO}\n"
-            "[dim]document-intelligence assistant — Hermes-style agentic RAG[/dim]\n\n"
-            f"[b]tools[/b]   {tools}\n"
-            "[b]skills[/b]  hybrid retrieval · conflict scan · action items · "
-            "doc-writer · KG · drive sync\n\n"
-            "[b]status[/b]  engine: in-process (lite) · surfaces: terminal + textual-serve"
+            "[b $accent]document intelligence agent[/]\n"
+            "[dim]chat with your knowledge — grounded · cited · multilingual[/dim]\n\n"
+            f"[dim]tools[/]    {tools}\n"
+            "[dim]skills[/]   [$secondary]hybrid retrieval · conflict scan · action items · "
+            "doc-writer · knowledge graph · drive sync[/]\n\n"
+            "[dim]engine[/] in-process (lite)    [dim]surfaces[/] terminal · browser"
         )
         with Middle(), Center():
             yield Static(body, id="inventory", markup=True)
         with Center():
-            yield Static("[dim]press any key to enter studio[/dim]", id="hint")
+            yield Static("[dim]press any key to enter[/dim]", id="hint")
 
     def _dismiss(self) -> None:
         if self.is_running:
