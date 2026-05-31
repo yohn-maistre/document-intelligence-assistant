@@ -281,3 +281,49 @@ def test_drive_status_agent_mode(monkeypatch):
     obj = _assert_single_json_stdout(result)
     assert obj["manifest_files"] == 2
     assert obj["page_token_seeded"] is True
+
+
+# ─── memory recall / save / show-soul (Phase A.2 verbs, wired by S0) ──────────
+class _FakeFact:
+    def __init__(self, fact, kind="note", ts="2026-05-31T00:00:00Z", score=0.9):
+        self.fact, self.kind, self.ts, self.score = fact, kind, ts, score
+
+
+class _FakeStore:
+    def recall(self, query, k=4):
+        return [_FakeFact("Atlas escalates to PMO at severity>=3")]
+
+    def save(self, fact):
+        return fact  # MemoryFact passes through; has .fact / .kind
+
+    def read_soul(self):
+        return "klerk persona: document-intelligence agent."
+
+
+def test_memory_recall_agent_mode(monkeypatch):
+    import klerk.cli.memory_cmd as mc
+
+    monkeypatch.setattr(mc, "_store", lambda: _FakeStore())
+    result = runner.invoke(app, ["memory", "recall", "escalation", "--agent"])
+    obj = _assert_single_json_stdout(result)
+    assert obj["query"] == "escalation"
+    assert obj["facts"] and "PMO" in obj["facts"][0]["fact"]
+
+
+def test_memory_save_agent_mode(monkeypatch):
+    import klerk.cli.memory_cmd as mc
+
+    monkeypatch.setattr(mc, "_store", lambda: _FakeStore())
+    result = runner.invoke(app, ["memory", "save", "Project Sakura ships Q3", "--agent"])
+    obj = _assert_single_json_stdout(result)
+    assert obj["saved"] is True
+    assert obj["fact"] == "Project Sakura ships Q3"
+
+
+def test_memory_show_soul_agent_mode(monkeypatch):
+    import klerk.cli.memory_cmd as mc
+
+    monkeypatch.setattr(mc, "_store", lambda: _FakeStore())
+    result = runner.invoke(app, ["memory", "show-soul", "--json"])
+    obj = _assert_single_json_stdout(result)
+    assert "persona" in obj["soul"]
