@@ -111,7 +111,7 @@ def studio_cmd(
     mode: Annotated[str, typer.Option("--mode", help="Engine mode: 'lite' (in-process orchestrator) or 'full' (SSE to /chat).")] = "lite",
     base_url: Annotated[str, typer.Option("--base-url", help="FastAPI base URL used by 'full' mode.")] = "http://localhost:8000",
     locale: Annotated[str, typer.Option("--locale", "-l", help="en | id")] = "en",
-    theme: Annotated[str, typer.Option("--theme", help="klerk-cyberpunk | klerk-slate | klerk-light (switch live via Ctrl+P).")] = "klerk-cyberpunk",
+    theme: Annotated[str, typer.Option("--theme", help="klerk-slate | klerk-cyberpunk | klerk-light (switch live via Ctrl+P).")] = "klerk-slate",
 ) -> None:
     """Open klerk studio — files / live-chat / activity / status / traces."""
     from klerk.studio import app as studio_app
@@ -221,7 +221,7 @@ def chat(
     mode: Annotated[str, typer.Option("--mode", help="Engine mode: 'lite' (in-process orchestrator) or 'full' (SSE to /chat).")] = "lite",
     base_url: Annotated[str, typer.Option("--base-url", help="FastAPI base URL used by 'full' mode.")] = "http://localhost:8000",
     compact: Annotated[bool, typer.Option("--compact", help="Chat-only layout (drops side panels) for very cramped terminals.")] = False,
-    theme: Annotated[str, typer.Option("--theme", help="klerk-cyberpunk | klerk-slate | klerk-light (switch live via Ctrl+P).")] = "klerk-cyberpunk",
+    theme: Annotated[str, typer.Option("--theme", help="klerk-slate | klerk-cyberpunk | klerk-light (switch live via Ctrl+P).")] = "klerk-slate",
 ) -> None:
     """Open the klerk studio cockpit (full panels), defaulting to the in-process engine."""
     from klerk.studio import app as studio_app

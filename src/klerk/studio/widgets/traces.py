@@ -46,7 +46,7 @@ class TracesPanel(Container):
     DEFAULT_CSS = """
     TracesPanel {
         height: 1fr;
-        border: round $secondary;
+        border: solid $secondary;
         border-title-color: $secondary;
         padding: 0 1;
     }

@@ -92,12 +92,14 @@ class KlerkStudio(App):
         grid-columns: 28 1fr 34;
         grid-gutter: 0 0;
     }
-    #right-rail { height: 1fr; }
-    #right-rail > ActivityTable { height: 14; }
-    #right-rail > TracesPanel { height: 9; }
-    #right-rail > EvalPanel { height: 12; }
-    #right-rail > KgSnapshot { height: 14; }
-    #right-rail > SparkGraph { height: 16; }
+    /* Proportional rail heights so every pane fits the viewport — no clipping.
+       min-height keeps each usable; a very short terminal scrolls gracefully. */
+    #right-rail { height: 1fr; scrollbar-gutter: stable; }
+    #right-rail > ActivityTable { height: 2fr; min-height: 7; }
+    #right-rail > TracesPanel { height: 1fr; min-height: 5; }
+    #right-rail > EvalPanel { height: 1fr; min-height: 5; }
+    #right-rail > KgSnapshot { height: 1fr; min-height: 5; }
+    #right-rail > SparkGraph { height: 1fr; min-height: 6; }
     #lite-root { height: 1fr; }
 
     /* ── narrow (phones): same panes, stacked + scrollable ── */
@@ -110,6 +112,12 @@ class KlerkStudio(App):
     .-narrow #chat-pane  { width: 1fr; height: 24; }
     .-narrow #right-rail { width: 1fr; height: auto; overflow: hidden; }
     .-narrow #right-rail > * { width: 1fr; }
+    /* restore fixed heights when stacked (1fr collapses under an auto parent) */
+    .-narrow #right-rail > ActivityTable { height: 12; }
+    .-narrow #right-rail > TracesPanel { height: 9; }
+    .-narrow #right-rail > EvalPanel { height: 10; }
+    .-narrow #right-rail > KgSnapshot { height: 12; }
+    .-narrow #right-rail > SparkGraph { height: 14; }
     /* shed low-priority status items so the bar never truncates the model */
     .-narrow #status-ctx, .-narrow #status-sync { display: none; }
     """

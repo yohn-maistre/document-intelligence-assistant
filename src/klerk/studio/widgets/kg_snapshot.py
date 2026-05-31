@@ -39,7 +39,7 @@ class KgSnapshot(Container):
     DEFAULT_CSS = """
     KgSnapshot {
         height: 1fr;
-        border: round $primary;
+        border: solid $primary;
         border-title-color: $primary;
     }
     """

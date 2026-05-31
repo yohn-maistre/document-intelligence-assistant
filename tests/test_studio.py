@@ -15,7 +15,7 @@ from textual.widgets import Collapsible, Input, Markdown
 
 from klerk.studio.app import KlerkStudio
 from klerk.studio.splash import SplashScreen
-from klerk.studio.theme import KLERK_THEME
+from klerk.studio.theme import KLERK_THEME, KLERK_THEMES
 from klerk.studio.widgets import (
     ActivityTable,
     FilesTree,
@@ -29,11 +29,13 @@ NARROW = (80, 24)
 
 
 def test_theme_palette() -> None:
-    assert KLERK_THEME.name == "klerk-cyberpunk"
+    # default is the slate-blue theme; cyberpunk + light are registered alts
+    assert KLERK_THEME.name == "klerk-slate"
     assert KLERK_THEME.dark is True
-    # magenta primary + cyan secondary
-    assert KLERK_THEME.primary.lower().startswith("#ff")
+    assert KLERK_THEME.primary.lower() == "#7aa2f7"
     assert KLERK_THEME.secondary is not None
+    names = {t.name for t in KLERK_THEMES}
+    assert {"klerk-slate", "klerk-cyberpunk", "klerk-light"} <= names
 
 
 @pytest.mark.asyncio

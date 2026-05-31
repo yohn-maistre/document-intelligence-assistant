@@ -45,7 +45,7 @@ class ActivityTable(Container):
     DEFAULT_CSS = """
     ActivityTable {
         height: 1fr;
-        border: round $secondary;
+        border: solid $secondary;
         border-title-color: $secondary;
     }
     ActivityTable DataTable {

@@ -1,82 +1,83 @@
-"""Cyberpunk-dark Textual theme for klerk studio.
+"""klerk studio Textual themes.
 
-A magenta + cyan palette (Posting magenta / Dolphie cyan lineage) over a
-near-black canvas. Exposed as a Textual ``Theme`` object plus a small CSS
-string for widgets that style outside the variable system.
+Default: **klerk-slate** — a calm Tokyo-Night-leaning slate-blue dark palette
+(crisp, not neon). Alternates are registered for live switching via the command
+palette (Ctrl+P → "Change theme"): **klerk-cyberpunk** (magenta/cyan easter egg)
+and **klerk-light** (daytime). Plus a small shared CSS string.
 """
 
 from __future__ import annotations
 
 from textual.theme import Theme
 
-# Core palette ----------------------------------------------------------------
-MAGENTA = "#ff2bd6"  # primary accent — prompts, focus, headings
-CYAN = "#22d3ee"  # secondary accent — links, tool cards, sparklines
-CANVAS = "#0a0b10"  # app background (near-black)
-SURFACE = "#12141c"  # panels / tables
-PANEL = "#181b26"  # raised panels
-FOREGROUND = "#e6e6f0"  # body text
-SUCCESS = "#39ff8a"
-WARNING = "#ffc857"
-ERROR = "#ff5c7a"
+# ── klerk-slate (default) — Tokyo-Night-leaning slate blue ────────────────────
+SLATE_BG = "#1a1b26"  # deep slate (not pure black — better glyph contrast)
+SLATE_SURFACE = "#1f2335"  # panels / tables
+SLATE_PANEL = "#24283b"  # raised panels / headers / status bar
+SLATE_FG = "#c0caf5"  # soft blue-white body text
+BLUE = "#7aa2f7"  # primary — borders, focus, headings
+CYAN = "#7dcfff"  # secondary — links, tool cards, sparklines
+LAVENDER = "#bb9af7"  # accent — tasteful pop
+SUCCESS = "#9ece6a"
+WARNING = "#e0af68"
+ERROR = "#f7768e"
 
-
-KLERK_THEME = Theme(
-    name="klerk-cyberpunk",
-    primary=MAGENTA,
+KLERK_SLATE = Theme(
+    name="klerk-slate",
+    primary=BLUE,
     secondary=CYAN,
-    accent=CYAN,
-    background=CANVAS,
-    surface=SURFACE,
-    panel=PANEL,
-    foreground=FOREGROUND,
+    accent=LAVENDER,
+    background=SLATE_BG,
+    surface=SLATE_SURFACE,
+    panel=SLATE_PANEL,
+    foreground=SLATE_FG,
     success=SUCCESS,
     warning=WARNING,
     error=ERROR,
     dark=True,
     variables={
-        "block-cursor-foreground": CANVAS,
-        "block-cursor-background": MAGENTA,
-        "border": MAGENTA,
-        "border-blurred": "#3a2050",
+        "border": BLUE,
+        "border-blurred": "#3b4261",  # mid-slate — unfocused panes still show a line
         "footer-key-foreground": CYAN,
-        "input-cursor-background": MAGENTA,
-        "input-selection-background": "#ff2bd644",
-        "scrollbar": "#2a1840",
-        "scrollbar-hover": MAGENTA,
+        "input-cursor-background": BLUE,
+        "input-selection-background": "#7aa2f733",
+        "scrollbar": "#2a2e42",
+        "scrollbar-hover": BLUE,
         "link-color": CYAN,
     },
 )
 
-# klerk-slate — a lower-saturation cyan-on-slate skin. Easier on the eyes in the
-# browser (textual-serve) and on terminals where hot magenta-on-black is harsh.
-KLERK_SLATE = Theme(
-    name="klerk-slate",
-    primary=CYAN,
-    secondary="#7aa2f7",
-    accent=CYAN,
-    background="#0d1117",
-    surface="#11161f",
-    panel="#161c28",
-    foreground="#c9d1d9",
-    success=SUCCESS,
-    warning=WARNING,
-    error=ERROR,
+# ── klerk-cyberpunk (alt / easter egg) — magenta + cyan over near-black ───────
+KLERK_CYBER = Theme(
+    name="klerk-cyberpunk",
+    primary="#ff2bd6",
+    secondary="#22d3ee",
+    accent="#22d3ee",
+    background="#0a0b10",
+    surface="#12141c",
+    panel="#181b26",
+    foreground="#e6e6f0",
+    success="#39ff8a",
+    warning="#ffc857",
+    error="#ff5c7a",
     dark=True,
     variables={
-        "border": CYAN,
-        "border-blurred": "#1f2a3a",
-        "footer-key-foreground": CYAN,
-        "link-color": "#7aa2f7",
+        "border": "#ff2bd6",
+        "border-blurred": "#3a2050",
+        "footer-key-foreground": "#22d3ee",
+        "input-cursor-background": "#ff2bd6",
+        "scrollbar": "#2a1840",
+        "scrollbar-hover": "#ff2bd6",
+        "link-color": "#22d3ee",
     },
 )
 
-# klerk-light — daytime / projector palette (dark=False).
+# ── klerk-light — daytime / projector ─────────────────────────────────────────
 KLERK_LIGHT = Theme(
     name="klerk-light",
-    primary="#b3008f",
+    primary="#3457d5",
     secondary="#0e7490",
-    accent="#0e7490",
+    accent="#7c3aed",
     background="#f6f7fb",
     surface="#ffffff",
     panel="#eef0f6",
@@ -85,13 +86,13 @@ KLERK_LIGHT = Theme(
     warning="#b45309",
     error="#be123c",
     dark=False,
-    variables={"border": "#b3008f", "link-color": "#0e7490"},
+    variables={"border": "#3457d5", "link-color": "#0e7490"},
 )
 
 # Registered in order; the first is the default. The built-in command palette's
-# "Change theme" entry switches between them live (Textual ≥8).
-KLERK_THEMES = [KLERK_THEME, KLERK_SLATE, KLERK_LIGHT]
-
+# "Change theme" entry switches between them live.
+KLERK_THEMES = [KLERK_SLATE, KLERK_CYBER, KLERK_LIGHT]
+KLERK_THEME = KLERK_SLATE  # the default
 
 # Shared app CSS (kept tiny — most styling rides the theme variables) ----------
 STUDIO_CSS = """
@@ -106,5 +107,10 @@ DataTable > .datatable--header {
     background: $panel;
     color: $secondary;
     text-style: bold;
+}
+/* Unobtrusive 1-cell scrollbars everywhere. */
+* {
+    scrollbar-size-vertical: 1;
+    scrollbar-size-horizontal: 1;
 }
 """

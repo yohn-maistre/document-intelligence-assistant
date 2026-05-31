@@ -38,7 +38,7 @@ class FilesTree(Container):
     DEFAULT_CSS = """
     FilesTree {
         height: 1fr;
-        border: round $primary;
+        border: solid $primary;
         border-title-color: $primary;
         padding: 0 1;
     }

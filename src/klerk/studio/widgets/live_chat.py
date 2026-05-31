@@ -31,7 +31,7 @@ class LiveChat(Container):
     DEFAULT_CSS = """
     LiveChat {
         height: 1fr;
-        border: round $primary;
+        border: solid $primary;
         border-title-color: $primary;
     }
     LiveChat #chat-log {
@@ -50,7 +50,7 @@ class LiveChat(Container):
     LiveChat #chat-loader.-busy { display: block; }
     LiveChat .human-message {
         width: 1fr; height: auto;
-        border: round $primary 60%;
+        border: solid $primary;
         border-title-color: $primary;
         padding: 0 1;
         margin: 1 1 0 1;
@@ -58,14 +58,14 @@ class LiveChat(Container):
     }
     LiveChat .assistant-message {
         width: 1fr; height: auto;
-        border: round $accent 60%;
+        border: solid $accent;
         border-title-color: $accent;
         padding: 0 1;
         margin: 0 1;
         transition: background 200ms, border 200ms;
     }
     LiveChat .assistant-message.-streaming { background: $accent 8%; }
-    LiveChat .assistant-message:focus-within { border: round $accent; }
+    LiveChat .assistant-message:focus-within { border: heavy $accent; }
     LiveChat .tool-card {
         border: round $accent;
         margin: 0 2;

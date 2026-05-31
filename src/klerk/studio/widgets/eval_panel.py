@@ -59,7 +59,7 @@ class EvalPanel(Container):
     DEFAULT_CSS = """
     EvalPanel {
         height: 1fr;
-        border: round $secondary;
+        border: solid $secondary;
         border-title-color: $secondary;
     }
     """
