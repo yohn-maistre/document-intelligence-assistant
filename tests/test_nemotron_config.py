@@ -86,3 +86,34 @@ def test_partial_cf_credentials_means_no_headers(monkeypatch: pytest.MonkeyPatch
     monkeypatch.setenv("CF_CLIENT_ID", "only-id")
     monkeypatch.delenv("CF_CLIENT_SECRET", raising=False)
     assert NemotronConfig.from_env().cf_headers == {}
+
+
+def test_complete_live_path_no_double_messages(monkeypatch):
+    """Regression: router.complete() must not pass `messages` to lookup() twice.
+
+    The cache lookup runs before the LLM call; a bug passed `messages` both
+    positionally and via **kwargs (TypeError: got multiple values for 'messages').
+    Tests mock the LLM so this live path was never exercised until it failed in
+    the field. This locks the fix.
+    """
+    import types
+    import litellm
+    from klerk.llm import router
+
+    monkeypatch.setenv("LITELLM_KEY", "x")
+    monkeypatch.setenv("PROXY_URL", "https://example.com")
+    monkeypatch.setenv("CF_CLIENT_ID", "a")
+    monkeypatch.setenv("CF_CLIENT_SECRET", "b")
+
+    def _fake_completion(**kwargs):
+        msg = types.SimpleNamespace(content="pong")
+        return types.SimpleNamespace(choices=[types.SimpleNamespace(message=msg)])
+
+    monkeypatch.setattr(litellm, "completion", _fake_completion)
+
+    resp = router.complete(
+        messages=[{"role": "user", "content": "ping"}],
+        max_tokens=8,
+        use_cache=True,
+    )
+    assert resp.choices[0].message.content == "pong"

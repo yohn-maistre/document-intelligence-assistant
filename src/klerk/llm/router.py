@@ -119,10 +119,10 @@ def complete(
         if tool_choice is not None:
             kwargs["tool_choice"] = tool_choice
 
-    # Cache lookup
+    # Cache lookup (messages is already in kwargs — don't pass it twice)
     cache_key: str | None = None
     if use_cache:
-        cache_key, hit = lookup(messages, **kwargs)
+        cache_key, hit = lookup(**kwargs)
         if hit is not None:
             return CachedResponse.from_text(hit.response_text, layer=hit.layer)
 
