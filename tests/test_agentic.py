@@ -1,6 +1,6 @@
 """Step-7 agentic capabilities — A (Escalation) / B (Action Items) /
-E (Drift). Capability D (Writer) is already exercised by the existing
-proposal_pipeline tests; here we just verify the Pydantic façade.
+E (Drift). Capability D (Writer) is already exercised by the doc_writer
+tests; here we just verify the Pydantic façade.
 
 LLM calls are mocked; the drift agent is exercised end to end against a
 synthetic LanceDB snapshot since the corpus + manifest tests don't need
@@ -163,14 +163,14 @@ def test_action_items_extract_requires_one_input():
 def test_action_items_extract_from_text(monkeypatch):
     from klerk.agent import action_items
 
-    def fake_ask_json(schema, *, system, user, locale, max_tokens):
+    def fake_ask_typed(schema, *, system, user, locale, max_tokens):
         assert "TEXT:\n" in user
         return ActionExtraction(
             items=[ActionItem(assignee="Tanaka", action="Review report", due="Friday")],
             source="text",
         )
 
-    monkeypatch.setattr(action_items, "ask_json", fake_ask_json)
+    monkeypatch.setattr(action_items, "ask_typed", fake_ask_typed)
     result = action_items.extract(text="Tanaka, please review the report by Friday.")
     assert result.source == "text"
     assert len(result.items) == 1
@@ -181,13 +181,13 @@ def test_action_items_extract_forces_source_field(monkeypatch):
     """Even if the model fills source wrong, the agent overrides it."""
     from klerk.agent import action_items
 
-    def fake_ask_json(*a, **kw):
+    def fake_ask_typed(*a, **kw):
         return ActionExtraction(
             items=[ActionItem(assignee="x", action="y")],
             source="wrong",  # the model lied
         )
 
-    monkeypatch.setattr(action_items, "ask_json", fake_ask_json)
+    monkeypatch.setattr(action_items, "ask_typed", fake_ask_typed)
     result = action_items.extract(text="hi")
     assert result.source == "text"
 
@@ -335,7 +335,7 @@ def test_drift_writes_events_to_jsonl(drift_state, monkeypatch):
 # ─── Writer façade ───────────────────────────────────────────────────────────
 def test_writer_maps_internal_proposal_to_public_summary(monkeypatch):
     from klerk.agent import writer
-    from klerk.agent.proposal_pipeline import Proposal
+    from klerk.agent.doc_writer import Proposal, SectionRound
     from klerk.agent.schemas import (
         Adjudication,
         DraftedSection,
@@ -343,7 +343,6 @@ def test_writer_maps_internal_proposal_to_public_summary(monkeypatch):
         ProposalSection,
         RubricScores,
     )
-    from klerk.agent.proposal_pipeline import SectionRound
 
     fake_proposal = Proposal(
         topic="Q1 review",

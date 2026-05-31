@@ -10,7 +10,6 @@ of KLERK_DRIVE_MANIFEST / KLERK_DRIVE_DOWNLOAD_DIR.
 from __future__ import annotations
 
 import io
-import json
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -326,3 +325,92 @@ def test_service_factory_raises_when_creds_file_missing(monkeypatch, tmp_path):
     monkeypatch.setenv("GOOGLE_APPLICATION_CREDENTIALS", str(tmp_path / "does-not-exist.json"))
     with pytest.raises(RuntimeError, match="not found"):
         ds._service()
+
+
+# ─── Upload ──────────────────────────────────────────────────────────────────
+def _make_upload_service(*, existing=None):
+    """MagicMock Drive service for upload: scripts files().list + files().create."""
+    svc = MagicMock()
+    existing = existing or []
+    svc.files.return_value.list.return_value.execute.return_value = {"files": existing}
+
+    counter = {"n": 0}
+
+    def _create(**_kwargs):
+        counter["n"] += 1
+        m = MagicMock()
+        m.execute.return_value = {"id": f"new_id_{counter['n']}"}
+        return m
+
+    svc.files.return_value.create.side_effect = _create
+    return svc
+
+
+@pytest.fixture
+def _corpus(tmp_path):
+    d = tmp_path / "corpus"
+    d.mkdir()
+    (d / "a.pdf").write_bytes(b"%PDF-1.4 a")
+    (d / "b.docx").write_bytes(b"docx-b")
+    (d / "c.txt").write_text("plain c")
+    return d
+
+
+def test_upload_directory_uploads_all(_corpus):
+    svc = _make_upload_service()
+    report = ds.upload_directory(_corpus, folder_id="dest", service=svc)
+    assert report.dry_run is False
+    assert len(report.uploaded) == 3
+    assert {r.name for r in report.uploaded} == {"a.pdf", "b.docx", "c.txt"}
+    assert all(r.file_id and r.file_id.startswith("new_id_") for r in report.uploaded)
+    assert svc.files.return_value.create.call_count == 3
+
+
+def test_upload_dry_run_touches_no_write_api(_corpus):
+    svc = _make_upload_service()
+    report = ds.upload_directory(_corpus, folder_id="dest", service=svc, dry_run=True)
+    assert report.dry_run is True
+    assert all(r.status == "dry-run" for r in report.results)
+    assert all(r.file_id is None for r in report.results)
+    # create() is the only write API — it must never be called on a dry run
+    svc.files.return_value.create.assert_not_called()
+
+
+def test_upload_skips_existing_by_name(_corpus):
+    svc = _make_upload_service(existing=[{"id": "old_a", "name": "a.pdf"}])
+    report = ds.upload_directory(_corpus, folder_id="dest", service=svc)
+    skipped = {r.name for r in report.skipped}
+    uploaded = {r.name for r in report.uploaded}
+    assert skipped == {"a.pdf"}
+    assert uploaded == {"b.docx", "c.txt"}
+    # the skipped result carries the pre-existing file_id
+    assert next(r for r in report.skipped).file_id == "old_a"
+    assert svc.files.return_value.create.call_count == 2
+
+
+def test_upload_respects_glob(_corpus):
+    svc = _make_upload_service()
+    report = ds.upload_directory(_corpus, folder_id="dest", service=svc, glob="*.pdf")
+    assert {r.name for r in report.uploaded} == {"a.pdf"}
+
+
+def test_upload_single_file(_corpus):
+    svc = _make_upload_service()
+    report = ds.upload_directory(_corpus / "b.docx", folder_id="dest", service=svc)
+    assert len(report.uploaded) == 1
+    assert report.uploaded[0].name == "b.docx"
+
+
+def test_upload_raises_when_folder_missing(monkeypatch, _corpus):
+    monkeypatch.delenv("DRIVE_FOLDER_ID", raising=False)
+    with pytest.raises(RuntimeError, match="folder_id"):
+        ds.upload_directory(_corpus, service=_make_upload_service())
+
+
+def test_upload_raises_when_src_missing(tmp_path):
+    with pytest.raises(RuntimeError, match="source path not found"):
+        ds.upload_directory(tmp_path / "nope", folder_id="dest", service=_make_upload_service())
+
+
+def test_upload_scope_is_drive_file():
+    assert ds.UPLOAD_SCOPE.endswith("drive.file")

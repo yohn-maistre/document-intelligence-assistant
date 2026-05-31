@@ -1,10 +1,10 @@
 # agentskills.io manifest — capability D
-# Multi-drafter adversarial proposal writer.
+# Multi-drafter adversarial doc-writer.
 
 apiVersion: skills.dev/v1
 kind: Skill
 metadata:
-  name: klerk.writer
+  name: klerk.draft_doc
   version: 1.0.0
   vendor: klerk
   homepage: https://github.com/yohn-maistre/document-intelligence-assistant
@@ -12,10 +12,12 @@ metadata:
 
 spec:
   description: |
-    Generates a multi-section proposal with adversarial A/B drafting:
+    Generates a multi-section document with adversarial A/B drafting:
     Drafter-A and Drafter-B write competing drafts against the same
     retrieved evidence; the Adjudicator picks the stronger one; the
     Critic scores the winner against klerk's custom 5-axis rubric.
+    Stages run as a LangGraph StateGraph (parallel drafters as a graph
+    fan-out) with durable per-run checkpoints for resume.
 
   inputs:
     - name: topic

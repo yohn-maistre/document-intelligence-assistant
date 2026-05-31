@@ -1,9 +1,11 @@
 """LiteLLM SDK wrapper — single entry point for all Python-side LLM traffic.
 
-Pi handles its own LLM calls via OpenAI-compat directly. Everything else in
-klerk (proposal pipeline, KG extraction, judges, eval rubric, FAQ builder)
-calls through here so we get one place to add fallbacks, cost tracking, and
-cache wiring.
+Pi handles its own LLM calls via OpenAI-compat directly. The cached,
+locale-routed Python LLM traffic (doc-writer, conflict graph, judges, eval
+rubric, FAQ builder) calls through here. The three one-shot typed agents
+(action_items, kg_extract, contradiction.judge_pair) route via PydanticAI in
+klerk.agent.pai — which reuses this module's `_select_model` for locale-aware
+routing but bypasses the cache layers (see pai.py for the rationale).
 
 Cache integration: on every call we check DiskCache (exact match) then
 LanceDB `llm_cache` table (semantic match, cosine > threshold). Hits return

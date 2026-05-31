@@ -16,7 +16,7 @@ Exposed tools (current set; expands as more verbs land):
     extract_kg          — extract entities + relations from text
     kg_stats            — current KG node/edge counts
     contradict_scan     — KG contradiction sweep
-    propose             — full adversarial proposal pipeline
+    draft_doc           — full adversarial multi-drafter doc-writer
     faq_build           — Corpus Learning Agent
     eval_run_rubric     — run the 5-axis rubric over the golden set
 
@@ -160,8 +160,8 @@ def _tools() -> list[Tool]:
             },
         ),
         Tool(
-            name="propose",
-            description="Adversarial proposal pipeline. Returns the assembled markdown.",
+            name="draft_doc",
+            description="Adversarial multi-drafter doc-writer. Returns the assembled markdown.",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -329,8 +329,8 @@ def _dispatch(name: str, args: dict[str, Any]) -> Any:
         findings = scan(locale=args.get("locale", "en"))
         return {"n_findings": len(findings), "report_md": render_report(findings)}
 
-    if name == "propose":
-        from klerk.agent.proposal_pipeline import propose, save_proposal
+    if name == "draft_doc":
+        from klerk.agent.doc_writer import propose, save_proposal
 
         p = propose(
             args["topic"],

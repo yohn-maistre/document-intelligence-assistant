@@ -73,6 +73,60 @@ def test_chat_validates_k_bounds(client):
     assert r.status_code == 422
 
 
+def test_chat_streams_orchestrator_events_and_persists_session(client, monkeypatch):
+    """With creds present and the orchestrator mocked, /chat streams the SSE
+    events through and persists the turn under a fresh session id."""
+    monkeypatch.setenv("LITELLM_KEY", "sk-test")
+
+    async def fake_arun(query, *, session_id, locale, history):
+        yield {"event": "session", "data": json.dumps({"session_id": session_id})}
+        yield {"event": "token", "data": json.dumps({"text": "Parental leave is 90 days [hr:0]."})}
+        yield {"event": "citations", "data": json.dumps({"citations": ["hr:0"], "confidence": 0.4})}
+        yield {"event": "done", "data": json.dumps({"ttft_ms": 10, "total_ms": 20, "n_chunks": 1})}
+
+    from klerk.agent import orchestrator
+
+    monkeypatch.setattr(orchestrator, "arun", fake_arun)
+
+    with client.stream("POST", "/chat", json={"query": "parental leave?"}) as r:
+        assert r.status_code == 200
+        raw = "".join(r.iter_text())
+
+    assert "event: session" in raw
+    assert "event: token" in raw
+    assert "event: citations" in raw
+    assert "event: done" in raw
+
+    # The turn was persisted under the auto-issued session id.
+    from klerk.api.session import get_store
+
+    sessions = get_store().recent_sessions(limit=5)
+    assert len(sessions) == 1
+    turns = get_store().load(sessions[0])
+    assert turns[0].role == "user" and turns[0].content == "parental leave?"
+    assert turns[1].role == "assistant" and "Parental leave is 90 days" in turns[1].content
+
+
+def test_chat_reuses_supplied_session_id(client, monkeypatch):
+    monkeypatch.setenv("LITELLM_KEY", "sk-test")
+
+    async def fake_arun(query, *, session_id, locale, history):
+        yield {"event": "token", "data": json.dumps({"text": "ok"})}
+        yield {"event": "done", "data": json.dumps({"n_chunks": 0})}
+
+    from klerk.agent import orchestrator
+
+    monkeypatch.setattr(orchestrator, "arun", fake_arun)
+
+    with client.stream("POST", "/chat", json={"query": "hi", "session_id": "fixed-123"}) as r:
+        assert r.status_code == 200
+        "".join(r.iter_text())
+
+    from klerk.api.session import get_store
+
+    assert get_store().exists("fixed-123")
+
+
 # ─── /ingest ─────────────────────────────────────────────────────────────────
 def test_ingest_path_requires_path(client):
     r = client.post("/ingest", json={"source": "path"})
@@ -133,7 +187,7 @@ def test_actions_extract_accepts_text_input(client, monkeypatch):
 
     monkeypatch.setattr(
         action_items,
-        "ask_json",
+        "ask_typed",
         lambda *a, **kw: ActionExtraction(
             items=[ActionItem(assignee="Yan", action="Review report", due="Friday")],
             source="text",

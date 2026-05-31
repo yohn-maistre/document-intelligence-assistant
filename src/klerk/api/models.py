@@ -34,13 +34,25 @@ class ChatRequest(BaseModel):
     query: str = Field(..., min_length=1, max_length=2000)
     locale: Literal["en", "id"] = "en"
     k: int = Field(default=6, ge=1, le=20, description="Number of chunks to ground on.")
+    session_id: str | None = Field(
+        default=None,
+        description="Multi-turn session id. Omit to start a fresh session (one is issued).",
+    )
+    history_mode: Literal["auto", "off"] = Field(
+        default="auto",
+        description="'auto' replays compacted session history; 'off' is single-shot.",
+    )
 
 
 # Chat responses are SSE event streams. Event shapes (informational; not
 # enforced by Pydantic since SSE is text/event-stream):
+#   event: session     data: {"session_id": "..."}            # first frame
+#   event: tool_call   data: {"name": "search_hybrid", "args": {...}}
+#   event: tool_result data: {"name": "search_hybrid", "summary": "12 chunks"}
 #   event: token       data: {"text": "..."}
 #   event: citations   data: {"citations": ["doc:0", ...], "confidence": 0.87}
-#   event: done        data: {"ttft_ms": 412, "total_ms": 3104, "cached": false}
+#   event: escalation  data: {<EscalationDraft>}               # low confidence
+#   event: done        data: {"ttft_ms": 412, "total_ms": 3104, "tool_hops": 1}
 #   event: error       data: {"detail": "..."}
 
 
@@ -98,7 +110,7 @@ class ConflictReport(BaseModel):
     generated_at: datetime
 
 
-# ─── Draft (Option D — Writer; wired now via proposal_pipeline.py) ───────────
+# ─── Draft (Option D — Writer; wired via doc_writer.py + doc_writer_graph.py) ─
 class DraftRequest(BaseModel):
     topic: str = Field(..., min_length=1, max_length=500)
     n_sections: int = Field(default=3, ge=1, le=8)

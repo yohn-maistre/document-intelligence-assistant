@@ -19,7 +19,7 @@ def test_five_manifests_shipped():
         "escalation",
         "action_items",
         "conflict_report",
-        "writer",
+        "draft_doc",
         "drift",
     }
 
@@ -44,7 +44,7 @@ def test_every_manifest_declares_runtime():
 
 
 def test_writer_manifest_describes_pipeline_stages():
-    writer = next(m for m in manifests() if m["metadata"]["name"] == "klerk.writer")
+    writer = next(m for m in manifests() if m["metadata"]["name"] == "klerk.draft_doc")
     assert "pipeline" in writer["spec"]
     stages = writer["spec"]["pipeline"]["stages"]
     assert "drafter_a" in stages

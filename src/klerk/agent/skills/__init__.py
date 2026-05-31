@@ -4,7 +4,7 @@ Five YAML files, one per capability:
   - escalation.yaml      (A)  draft a routing email on low confidence
   - action_items.yaml    (B)  extract structured action items
   - conflict_report.yaml (C)  LangGraph-orchestrated contradiction sweep
-  - writer.yaml          (D)  adversarial multi-drafter proposal
+  - draft_doc.yaml       (D)  adversarial multi-drafter doc-writer
   - drift.yaml           (E)  scheduled corpus drift detection
 
 The manifests are portable: any agent runtime that consumes the

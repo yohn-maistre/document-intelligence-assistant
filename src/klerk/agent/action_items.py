@@ -10,10 +10,11 @@ content-agnostic — any doc with "do X by Y" language works.
 The internal pipeline:
   1. If doc_id given, pull every chunk for that doc from LanceDB; otherwise
      treat the input as the entire text.
-  2. Send the chunks (with chunk_ids preserved) to Nemotron with a strict
-     JSON schema asking for action items + per-item source_chunk attribution.
-  3. Parse + validate. Per-item failures are dropped with a warning, the
-     whole call doesn't blow up.
+  2. Send the chunks (with chunk_ids preserved) to Nemotron via a PydanticAI
+     `Agent(output_type=ActionExtraction)` asking for action items + per-item
+     source_chunk attribution. PydanticAI handles schema prompting + parsing.
+  3. The typed result is returned directly; the source field is pinned by the
+     caller so the model can't drift it.
 
 Output: `ActionExtraction` Pydantic model (see klerk.agent._models).
 """
@@ -21,7 +22,7 @@ Output: `ActionExtraction` Pydantic model (see klerk.agent._models).
 from __future__ import annotations
 
 from klerk.agent._models import ActionExtraction
-from klerk.agent.llm_json import ask_json
+from klerk.agent.pai import ask_typed
 from klerk.rag.store import CORPUS_TABLE, open_db
 
 _SYSTEM_PROMPT = """\
@@ -102,7 +103,7 @@ def extract(
         "Extract action items."
     )
 
-    result = ask_json(
+    result = ask_typed(
         ActionExtraction,
         system=_SYSTEM_PROMPT,
         user=user,

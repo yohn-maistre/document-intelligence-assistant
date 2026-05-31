@@ -47,8 +47,8 @@ class ActionExtraction(BaseModel):
     source: str = Field(..., description="`doc:<doc_id>` or `text` depending on input.")
 
 
-# ─── D · Writer (multi-drafter adversarial proposal) ─────────────────────────
-# The actual orchestration is in klerk.agent.proposal_pipeline; this model is
+# ─── D · Writer (multi-drafter adversarial doc-writer) ───────────────────────
+# The actual orchestration is in klerk.agent.doc_writer; this model is
 # the clean public output. The full Proposal object (with per-draft trace, the
 # adjudication reasoning, and the citation-check matrix) stays internal.
 class WriterSection(BaseModel):
