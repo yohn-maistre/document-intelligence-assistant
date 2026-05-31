@@ -11,18 +11,26 @@ Two modes:
 
 Tool-call / tool-result events render as collapsible inline cards. The event
 vocabulary is shared between both modes, so the rendering path is identical.
+
+Streaming answers are rendered with a small time throttle: updating the
+``Markdown`` widget re-parses the whole buffer (O(n²) over a turn), which lags
+on slow devices. We re-render at most ~10fps and always flush the tail on
+``done`` / ``error`` so no content is dropped.
 """
 
 from __future__ import annotations
 
 import json
 import uuid
+from time import monotonic
 from typing import Any
 
 from textual import work
 from textual.app import ComposeResult
 from textual.containers import Container, VerticalScroll
 from textual.widgets import Collapsible, Input, LoadingIndicator, Markdown, Static
+
+_RENDER_INTERVAL = 0.1  # seconds between streaming re-renders (~10fps)
 
 
 class LiveChat(Container):
@@ -129,6 +137,8 @@ class LiveChat(Container):
         self._answer_md = Markdown("", classes="assistant-message -streaming")
         self._answer_md.border_title = "klerk"
         await self._mount(self._answer_md)
+        self._dirty = False
+        self._last_render = 0.0
         self._set_busy(True)
         if self.mode == "full":
             self._run_full(query)
@@ -138,6 +148,13 @@ class LiveChat(Container):
     async def _mount(self, widget: Any) -> None:
         await self._log.mount(widget)
         self._log.scroll_end(animate=False)
+
+    def _flush_answer(self) -> None:
+        """Render the accumulated answer buffer into the bubble immediately."""
+        if self._answer_md is not None:
+            self._answer_md.update(self._answer_buf)
+            self._log.scroll_end(animate=False)
+            self._dirty = False
 
     # ── event rendering (shared by both modes) ───────────────────────────────
     async def _handle_event(self, event: str, data: dict[str, Any]) -> None:
@@ -164,14 +181,10 @@ class LiveChat(Container):
             )
         elif event == "token":
             self._answer_buf += data.get("text", "")
-            await self._ensure_answer_md()
-            # Throttle: re-rendering Markdown re-parses the whole buffer (O(n²)),
-            # which lags on slow devices. Render at most ~10fps; the tail is
-            # always flushed on `done`/`error`, so no content is ever lost.
-            from time import monotonic
-
+            # Throttle: render at most ~10fps; the tail is always flushed on
+            # done/error, so nothing is lost even if the last token is buffered.
             now = monotonic()
-            if now - self._last_render >= 0.1:
+            if now - self._last_render >= _RENDER_INTERVAL:
                 self._flush_answer()
                 self._last_render = now
             else:
