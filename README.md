@@ -1,242 +1,252 @@
 # klerk
 
-> **Document Intelligence Assistant** — production-shaped RAG over a Drive
-> corpus with five agentic capabilities, served via FastAPI, evaluated
-> against a 20-question rubric. Single-command bring-up via Docker.
+> **Chat with your company's documents — privately.** klerk is a self-hosted
+> document-intelligence agent that ingests your files from Google Drive, answers
+> questions with grounded citations, and runs entirely against *your own* LLM —
+> no third-party AI APIs, no data leaving your perimeter.
 
-Take-home submission for the **Middle AI Engineer** role at
-**PT Fata Organa Solusi**. The brief: build a doc-intelligence assistant
-for a fictional Indonesian-Japanese tech firm using **only** the
-provided Nemotron proxy (`nemotron-3-nano-omni` over a private
-Cloudflare-tunneled LiteLLM gateway).
+![Python](https://img.shields.io/badge/python-3.11+-blue)
+![FastAPI](https://img.shields.io/badge/API-FastAPI-009688)
+![Docker](https://img.shields.io/badge/run-docker%20compose-2496ED)
+![Tests](https://img.shields.io/badge/tests-247%20passing-brightgreen)
+![License](https://img.shields.io/badge/license-MIT-black)
 
-```
-                ┌─────────── docker compose up ───────────┐
-                │                                          │
-                ▼                                          ▼
-   FastAPI :8000  ─────── 9 routes ────────▶   Phoenix :6006
-        │
-        ├── /chat              SSE stream over CRAG-grounded retrieval
-        ├── /ingest            Drive (Service Account) or local path
-        ├── /sync-status       manifest snapshot
-        ├── /actions/extract   action items (capability B)
-        ├── /conflicts/scan    LangGraph spine (capability C)
-        ├── /draft             multi-drafter writer (capability D)
-        ├── /drift/recent      jsonl events (capability E)
-        └── /drift/scan        + scheduled nightly via APScheduler
-```
+klerk pairs hybrid retrieval (dense + lexical + reranking) with an agentic chat
+loop that knows when to search, when to cross-check sources, and when to say
+*"I don't know"* rather than guess. It speaks **English and Bahasa Indonesia**,
+ships two polished surfaces — a **FastAPI service** and a **terminal/browser
+cockpit** — and exposes every capability as an agent-friendly CLI so it slots
+into cron jobs, scripts, and other agents as cleanly as it serves humans.
+
+---
+
+## Features
+
+- **Grounded RAG chat** — hybrid retrieval (vector + BM25 + RRF + ColBERT
+  rerank) with inline source citations and honest *"not in the corpus"*
+  handling instead of hallucination.
+- **Agentic, not fixed-workflow** — a ReAct-style loop routes among in-process
+  tools (search, conflict-scan, action-item extraction, drafting, Drive sync)
+  and streams its reasoning as it goes.
+- **Google Drive ingestion** — incremental sync detects new / modified / deleted
+  files; handles PDF, DOCX, Markdown, and plain text.
+- **Self-hosted LLM only** — all generation routes through a single configurable
+  gateway (no OpenAI / Anthropic / Cohere). Your documents never leave your
+  network.
+- **Multilingual** — BGE-M3 embeddings + a multilingual model give first-class
+  Bahasa Indonesia support alongside English.
+- **Long-term memory** — a persistent identity + recalled-facts layer so the
+  agent carries context across sessions.
+- **Two surfaces, one engine** — a FastAPI backend (`:8000`) and a
+  Bloomberg-style Textual dashboard, usable in the terminal *or* served to the
+  browser (`:8001`) with no separate frontend build.
+- **Agent-friendly CLI** — every verb supports `--agent/--json` for clean,
+  machine-parseable output (the external tool contract for scripts, cron, and
+  other agents).
+- **Built-in sample-corpus generator** — spin up a realistic set of company
+  documents (HR policies, SOPs, meeting minutes, FAQs) for demos and testing
+  before you connect real data.
+- **Observability + evaluation** — OpenTelemetry traces via Arize Phoenix, and a
+  repeatable eval harness (custom rubric + RAGAS) over a question set.
+
+---
 
 ## Quick start
 
-```bash
-# 1. Fill in credentials (from the Nemotron password-zip)
-cp .env.example .env
-$EDITOR .env    # LITELLM_KEY, CF_CLIENT_ID, CF_CLIENT_SECRET,
-                # GOOGLE_APPLICATION_CREDENTIALS, DRIVE_FOLDER_ID
+### Docker — full stack (recommended)
 
-# 2. Bring everything up (one command per the brief)
+```bash
+cp .env.example .env          # fill in LLM gateway + Drive credentials
 docker compose up --build
-
-# 3. Open
-#    http://localhost:8000/docs    interactive API
-#    http://localhost:6006         Phoenix traces
 ```
 
-Without Docker (uv directly):
+| Service | URL | What |
+|---------|-----|------|
+| API | http://localhost:8000/docs | interactive FastAPI (chat, ingest, agents) |
+| Dashboard | http://localhost:8001 | Studio cockpit, served to the browser |
+| Traces | http://localhost:6006 | Arize Phoenix observability |
+
+### Local — full features (uv)
 
 ```bash
-make setup           # uv sync --extra dev
-make api             # uvicorn klerk.api.server:app
-make studio          # textual operator TUI
+uv sync --extra full          # API + local embeddings + dashboard
+cp .env.example .env
+uv run klerk chat             # or: uv run klerk studio   /   make api
 ```
 
-## The five agentic capabilities
+### Lite — constrained devices (no model download)
 
-The brief asks for ≥1 from menu A/B/C; we ship all five plus E:
-
-| ID | Capability | Endpoint | Where |
-|----|------------|----------|-------|
-| A  | Escalation Drafter — routes a low-confidence question to the right human owner with a structured email draft | inline `/chat` event when confidence < 0.3 | `src/klerk/agent/escalation.py` |
-| B  | Action Item Extractor — pulls (assignee, action, due, priority, source_chunk) from a doc or text | `POST /actions/extract` | `src/klerk/agent/action_items.py` |
-| C  | Conflict Reporter — cross-doc contradiction sweep through a 4-node LangGraph StateGraph | `POST /conflicts/scan` | `src/klerk/orchestrate/conflict_graph.py` |
-| D  | Writer — adversarial multi-drafter doc-writer (Drafter-A + Drafter-B + Adjudicator + Critic), LangGraph fan-out | `POST /draft` · `klerk write` | `src/klerk/agent/writer.py` + `doc_writer.py` + `doc_writer_graph.py` |
-| E  | Drift Detector — scheduled corpus diff (doc_added / doc_changed / doc_removed / scope_drift) | `GET /drift/recent` + `POST /drift/scan` | `src/klerk/agent/drift.py` + `src/klerk/scheduled/drift_runner.py` |
-
-Each capability ships an agentskills.io v1 YAML manifest under
-`src/klerk/agent/skills/` so any compatible runtime can mount them
-through klerk's Python entrypoints.
-
-## Architecture
-
-```
-                     ┌────────────────────────┐
-                     │   Reviewer's machine   │
-                     │   docker compose up    │
-                     └───────────┬────────────┘
-                                 │
-              ┌──────────────────┼─────────────────────┐
-              │                  │                     │
-      ┌───────▼────────┐  ┌──────▼─────────┐  ┌────────▼──────────┐
-      │   api          │  │   phoenix      │  │  gws-mcp (opt-in) │
-      │   FastAPI:8000 │  │   :6006        │  │  stdio / http     │
-      └───────┬────────┘  └────────────────┘  └───────────────────┘
-              │
-   ┌──────────┼───────────────────────────────────────────────┐
-   │   /chat /ingest /sync-status /health /openapi.json       │
-   │   /actions/extract /conflicts/scan /draft /drift/*       │
-   │                                                          │
-   │   ┌─────────────┐  ┌─────────────┐  ┌──────────────────┐ │
-   │   │ drive/sync  │  │ rag/        │  │ agent/           │ │
-   │   │ Service Acc │─▶│ chunker     │─▶│  A escalation    │ │
-   │   │ + manifest  │  │ embed BGE-M3│  │  B action_items  │ │
-   │   │ + changes   │  │ store Lance │  │  C (LangGraph)   │ │
-   │   └─────────────┘  │ retrieve    │  │  D writer        │ │
-   │                    │ rerank M3-CB│  │  E drift         │ │
-   │                    └──────┬──────┘  └──────┬───────────┘ │
-   │                           │                │             │
-   │                           └────────┬───────┘             │
-   │                                    ▼                     │
-   │                     ┌─────────────────────────┐          │
-   │                     │ llm/router → LiteLLM    │          │
-   │                     │ → CF Access (headers)   │          │
-   │                     │ → Nemotron proxy        │          │
-   │                     │ → nemotron-3-nano-omni  │          │
-   │                     └─────────────────────────┘          │
-   └──────────────────────────────────────────────────────────┘
-```
-
-### LangGraph spine (Conflict Reporter, capability C)
-
-```mermaid
-graph TD
-  retrieve_docs --> pair_facts
-  pair_facts --> judge_conflict
-  judge_conflict --> format_report
-  format_report --> __end__
-```
-
-Each node is independently inspectable; the StateGraph carries a
-checkpointer hook for resumability. The Mermaid file at
-`docs/conflict-graph.mmd` is auto-generated by
-`klerk.orchestrate.conflict_graph.export_diagram()` so the diagram
-above stays in sync with the actual compiled graph.
-
-## Retrieval pipeline
-
-| Stage | Implementation | What it does |
-|-------|----------------|--------------|
-| Parser | Docling 2.5+ (PyMuPDF fallback) | Layout-aware extraction with `KLERK_PARSER=pymupdf` escape hatch. |
-| Chunker | `src/klerk/rag/chunker.py` (~120 LOC) | Token-aware, tokenizer-pluggable (tiktoken → transformers → char heuristic). |
-| Embedder | BGE-M3 dense head via `FlagEmbedding.BGEM3FlagModel` | Multilingual, 1024-d, L2-normalised. Bahasa-strong. |
-| Vector store | LanceDB embedded | One process. Hybrid API exposes vector + BM25 in one call. |
-| Sparse | Tantivy FTS native to LanceDB | BM25 over the same columns. |
-| Fusion | RRF (k=60), ~30 LOC, hand-rolled | Reciprocal Rank Fusion. |
-| Rerank | BGE-M3 ColBERT head (MaxSim) | Same model as the embedder; no second model load. ~1GB lighter container than the v4 separate-cross-encoder path. |
-
-See [docs/design-decisions.md](docs/design-decisions.md) §v5-1 and §v5-2
-for the reranker collapse and the vision-language embedder evaluation.
-
-## Brief-spec compliance
-
-| Brief constraint                                        | Where        |
-|---------------------------------------------------------|--------------|
-| Only Nemotron proxy as the LLM (no OpenAI / Anthropic)  | `src/klerk/llm/router.py` + `nemotron.py` |
-| FastAPI server with `/chat /ingest /sync-status /health`| `src/klerk/api/server.py` |
-| Drive incremental sync (`changes.list` + `pageToken`)   | `src/klerk/drive/sync.py` |
-| ≥1 agentic capability from menu A/B/C                   | All five shipped — see capability matrix above |
-| 25-30 doc synthetic corpus with the format/locale/contradiction/table/cross-ref constraints | `src/klerk/synth/specs.py`; `klerk synth check` |
-| Own 20-Q eval set: 8 factual / 5 multi-hop / 3 conflict / 2 Bahasa / 2 trick | `evaluation_set.json` |
-| `docker compose up`                                     | `Dockerfile` + `docker-compose.yml` |
-| README, EVAL.md, DATA_GENERATION.md                     | this file + [EVAL.md](EVAL.md) + [DATA_GENERATION.md](DATA_GENERATION.md) |
-| "Don't hallucinate; say you don't know" handling        | `/chat` empty-retrieval path; `should_say_dont_know` items in eval (Q19, Q20); confidence-floor escalation |
-
-## Design influences
-
-| Source | What we extracted |
-|--------|-------------------|
-| Anthropic, *Building Effective Agents* | Single master loop ownership; framework only when the graph shape genuinely benefits. |
-| OpenJarvis (design pattern) | Three execution modes — on-demand HTTP / scheduled cron / continuous (Drive `changes.watch` flagged but not shipped). |
-| Hermes (single-loop ReAct) | The CRAG-lite loop in `agent/crag.py`. |
-| OpenClaw (workflow shape) | The 7-stage doc-writer in `agent/doc_writer.py` (LangGraph spine in `agent/doc_writer_graph.py`). |
-| agentskills.io v1 spec | The 5 YAML manifests under `src/klerk/agent/skills/`. |
-| LangGraph | Used in **one** place — the Conflict Reporter spine — because it's the only flow where state between LLM calls + per-node tracing + checkpointing all matter together. |
-
-## Eval at a glance
-
-20 questions distributed as 8 factual / 5 multi-hop / 3 conflict /
-2 Bahasa / 2 trick. Trick items must trigger an "I don't have that
-information" response — hallucinating with any confidence is a fail.
-Full methodology, the 5-axis rubric, judge-bias disclosure, and per-Q
-table in [EVAL.md](EVAL.md).
+Runs the agent + dashboard with a **remote** embedding endpoint, so it fits on a
+laptop, a small VPS, or a phone:
 
 ```bash
-klerk synth check                            # corpus plan satisfies the brief
-klerk synth gen                              # generate the 30-doc corpus
-klerk index build --src data/synth/fata_organa --rebuild
-klerk eval run --ragas --rubric              # → data/output/eval/*.json
+pip install -e ".[lite]"
+export KLERK_EMBED_BACKEND=remote KLERK_EMBED_REMOTE_URL=… KLERK_EMBED_REMOTE_MODEL=…
+klerk chat
 ```
 
-## Limitations + honest notes
+---
 
-- **CF Access token expiry**: the LiteLLM virtual key is valid for 90
-  days from 2026-05-28 — expires ~2026-08-26. Rotation steps in
-  `.env.example`.
-- **First-time container cold start** fetches ~1.2GB of BGE-M3 weights
-  unless the Docker image was built ahead. Multi-stage build pre-bakes
-  the weights so subsequent runs are instant.
-- **Drive bootstrap** of 25-30 docs runs 60-90s; client polls
-  `GET /ingest/runs/{run_id}` to track.
-- **LLM-as-judge bias**: the `citation_grounded` and `confidence` axes
-  use the same `nemotron-3-nano-omni` that generated the answer —
-  absolute scores ~10-15% inflated, per-category deltas reliable. See
-  [EVAL.md](EVAL.md) §3.
-- **Bahasa coverage** in the corpus is 4/30 docs — meets the ≥3 floor.
-  The Nemotron model is multilingual but Bahasa quality on long-tail
-  policy language hasn't been independently benchmarked.
+## How it works
 
-## Hardware
+```
+        ┌──────────────────── one engine, two surfaces ─────────────────────┐
+        │  FastAPI :8000  ·  Studio TUI (terminal + textual-serve :8001)    │
+        └───────────────────────────────┬──────────────────────────────────┘
+                                         │  in-process calls (no subprocess hop)
+              ┌──────────────────────────┴──────────────────────────┐
+              │  Agent loop — ReAct router + sliding-window memory   │
+              │  + long-term identity / recalled facts               │
+              └──────────────────────────┬──────────────────────────┘
+            ┌───────────────┬────────────┼────────────┬───────────────┐
+            ▼               ▼            ▼            ▼               ▼
+       search_hybrid   scan_conflicts  extract     draft_doc      drive_sync
+       (RAG)           (LangGraph)     _actions    (LangGraph)    (incremental)
+            │
+   ┌────────┴─────────────────────────────────────────────────────────────┐
+   │  Retrieval:  Docling parse → chunk → BGE-M3 embed → LanceDB           │
+   │              (vector + Tantivy BM25) → RRF fusion → ColBERT rerank    │
+   └──────────────────────────────────────────────────────────────────────┘
+            │
+   ┌────────┴───────────────────────────┐
+   │  LLM gateway (LiteLLM)             │  ← self-hosted only; env-configured
+   └────────────────────────────────────┘
+```
 
-| Need | Spec |
+The chat loop's tools run **in-process** (one model load per deployment, no
+per-call subprocess overhead). The same underlying functions are also exposed as
+CLI verbs — the *external* contract for non-Python callers. Full diagram and
+rationale in [docs/architecture.md](docs/architecture.md).
+
+---
+
+## Tech stack
+
+| Layer | Choice | Why |
+|-------|--------|-----|
+| API | **FastAPI** + Pydantic | async, typed, auto OpenAPI |
+| Agent orchestration | **LangGraph** (multi-step flows) + **PydanticAI** (typed one-shots) | graph where state matters; typed calls everywhere else |
+| LLM gateway | **LiteLLM** → self-hosted endpoint | one config-driven entry point, no vendor lock-in |
+| Embeddings | **BGE-M3** (local) or any OpenAI-compatible endpoint (remote) | multilingual, 1024-d, Bahasa-strong; pluggable |
+| Vector store | **LanceDB** (embedded) | vector + lexical search in one process, no sidecar DB |
+| Retrieval | hybrid (vector + **Tantivy** BM25) → **RRF** → **ColBERT** rerank | recall *and* precision; reranker reuses the embedder weights |
+| Parsing | **Docling** (PyMuPDF fallback) | layout-aware across PDF/DOCX/MD/TXT |
+| UI | **Textual** + **textual-serve** | terminal and browser from one Python codebase |
+| CLI | **Typer** with `--agent/--json` | human tables + machine JSON |
+| Observability | **Arize Phoenix** (OpenTelemetry) | spans for every retrieval + LLM call |
+| Eval | custom rubric + **RAGAS** | repeatable, zero-cost scoring |
+| Tooling | **uv**, **Docker**, **pytest** (247 tests) | reproducible builds + a real test suite |
+
+---
+
+## Usage
+
+**Chat** — `uv run klerk chat` (terminal), `uv run klerk studio` (full cockpit),
+or `POST /chat` (SSE stream with citations).
+
+**Core CLI verbs** (all support `--agent/--json`):
+
+| Verb | Does |
 |------|------|
-| RAM  | ~4GB peak (BGE-M3 fp32 + torch + the API). 8GB recommended. |
-| CPU  | Any x86_64 / aarch64 with manylinux wheels. Tested under Linux 6.x. |
-| GPU  | Not required. Set `KLERK_EMBED_DEVICE=cuda:0` for an ~8× speed-up on retrieval / rerank if available. |
-| Disk | ~3.5GB image (Python + torch + BGE-M3 weights pre-baked) + LanceDB + cache. |
-| Network | Outbound HTTPS to the Nemotron proxy (`llm-proxy.atlas-horizon.com`) and Drive API. |
+| `klerk chat` / `klerk studio` | interactive agent (TUI) |
+| `klerk search hybrid "<q>"` | one-shot hybrid retrieval |
+| `klerk extract-actions <src>` | structured action items from a doc |
+| `klerk contradict scan` | cross-document conflict report |
+| `klerk escalate draft "<q>"` | structured escalation email for a low-confidence question |
+| `klerk drive sync` / `upload` | incremental Drive ingest / push |
+| `klerk index build --src <dir>` | parse → chunk → embed → index |
+| `klerk memory recall "<q>"` | query long-term memory |
+| `klerk eval run` | run the evaluation harness |
 
-## Repo layout
+**API** — `/chat`, `/ingest`, `/sync-status`, `/health`, plus agent routes
+(`/conflicts/scan`, `/actions/extract`, `/draft`, `/drift/*`). See `/docs`.
 
+---
+
+## Generate a sample corpus
+
+No documents yet? klerk can generate a realistic company corpus to demo against —
+HR policies, technical SOPs, meeting minutes with action items, FAQs, and org
+charts, in English and Bahasa Indonesia, across PDF/DOCX/MD — then push it to
+Drive:
+
+```bash
+uv run klerk synth gen                                   # generate the documents
+uv run klerk index build --src data/synth/fata_organa    # index them
+uv run klerk drive upload data/synth/fata_organa --to "$DRIVE_FOLDER_ID"
 ```
-.
-├── src/klerk/
-│   ├── api/server.py            FastAPI surface (9 routes + middleware)
-│   ├── llm/                     LiteLLM + Nemotron + cache
-│   ├── drive/sync.py            Service Account incremental sync
-│   ├── rag/                     chunker / embed / store / retrieve / rerank
-│   ├── agent/                   escalation / action_items / drift / writer
-│   ├── agent/skills/            agentskills.io v1 YAML manifests
-│   ├── orchestrate/             LangGraph Conflict spine
-│   ├── scheduled/drift_runner.py APScheduler nightly drift
-│   ├── synth/                   Fata Organa corpus generator
-│   ├── eval/                    RAGAS + 5-axis rubric + golden loader
-│   ├── studio/                  Textual operator TUI
-│   ├── mcp/                     klerk-mcp gateway
-│   └── cli/                     Typer verbs
-├── tests/                       143 tests, all green
-├── evaluation_set.json          The brief's 20-question eval set
-├── EVAL.md                      Methodology + rubric + per-Q table
-├── DATA_GENERATION.md           Corpus generation methodology
-├── HANDOFF.md                   Internal handoff (planning state)
-├── docs/                        design-decisions.md + integrations/
-├── experimental/                Demoted components (TS shell, KG viz, …)
-├── frontend/streamlit_app.py    Deliberate stub — Textual is the chosen UI
-├── Dockerfile                   Multi-stage; pre-bakes BGE-M3 weights
-├── docker-compose.yml           One-command bring-up
-└── pyproject.toml               uv-managed; [scheduled] extra for drift runner
-```
+
+---
+
+## Configuration
+
+All configuration is via environment variables (see [`.env.example`](.env.example)) —
+nothing is hardcoded. Key settings:
+
+| Variable | Purpose |
+|----------|---------|
+| `LITELLM_KEY`, `PROXY_URL`, `CF_CLIENT_ID/SECRET` | LLM gateway endpoint + auth |
+| `KLERK_EMBED_BACKEND` | `local` (BGE-M3) · `remote` (OpenAI-compatible) · `mock` |
+| `GOOGLE_APPLICATION_CREDENTIALS`, `DRIVE_FOLDER_ID` | Drive service account + folder |
+
+**Install profiles:** `lite` (agent + remote embed, smallest footprint) ·
+`server` (FastAPI + dashboard) · `local` (local BGE-M3 + torch) ·
+`full` (everything, the Docker default).
+
+---
+
+## Roadmap
+
+klerk today is a self-hosted, single-workspace agent. Where it's headed:
+
+- **Self-serve Drive connect** — OAuth flow so any user can link their own Drive
+  (today: service account).
+- **Pluggable LLM backends** — bring-your-own OpenAI-compatible gateway alongside
+  the self-hosted default.
+- **Omni-channel chat** — talk to your documents from **WhatsApp, Telegram, and
+  Slack**, not just the API/TUI, so the assistant meets teams where they already
+  work.
+- **Continuous sync** — live Drive change-watch instead of on-demand incremental
+  pulls.
+- **Multi-tenant workspaces** — auth + per-team isolation for shared deployments.
+- **Deeper personalization** — memory-driven preferences and per-user context.
+
+---
+
+## Documentation
+
+| Doc | Contents |
+|-----|----------|
+| [docs/architecture.md](docs/architecture.md) | Full architecture + data flow |
+| [docs/design-decisions.md](docs/design-decisions.md) | Why these choices (incl. the embedder/reranker evaluation) |
+| [DATA_GENERATION.md](DATA_GENERATION.md) | How the sample corpus is generated + QC |
+| [EVAL.md](EVAL.md) | Evaluation methodology, rubric, and results |
+| [docs/ASSIGNMENT.md](docs/ASSIGNMENT.md) | Take-home brief mapping + compliance |
+
+---
+
+## Limitations & hardware
+
+- **LLM gateway dependency** — generation requires reachable, configured LLM and
+  (in local mode) embedding models; klerk explains slow/unavailable inference
+  rather than hanging.
+- **LLM-as-judge bias** — the eval judge shares the generation model, so absolute
+  scores skew optimistic; per-category deltas are the reliable signal (see
+  [EVAL.md](EVAL.md)).
+- **First local run** downloads ~2GB of BGE-M3 weights (skip entirely with
+  `KLERK_EMBED_BACKEND=remote`).
+
+| Resource | Local (full) | Lite (remote embed) |
+|----------|--------------|---------------------|
+| RAM | ~4GB peak (8GB recommended) | <1GB |
+| GPU | optional (`KLERK_EMBED_DEVICE=cuda:0` for speedup) | none |
+| Disk | ~3.5GB (image + weights) | minimal |
+
+CPU-only x86_64 / aarch64; tested under Linux 6.x. GPU is never required.
+
+---
 
 ## License
 
-MIT. The fictional Fata Organa Solusi spec, the synthetic corpus, and
-the evaluation set are purpose-built for this take-home and don't claim
-to represent any real organisation.
+MIT. The sample "Fata Organa Solusi" corpus and evaluation set are synthetic and
+do not represent any real organisation.
