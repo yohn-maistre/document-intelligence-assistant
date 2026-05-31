@@ -48,6 +48,51 @@ KLERK_THEME = Theme(
     },
 )
 
+# klerk-slate — a lower-saturation cyan-on-slate skin. Easier on the eyes in the
+# browser (textual-serve) and on terminals where hot magenta-on-black is harsh.
+KLERK_SLATE = Theme(
+    name="klerk-slate",
+    primary=CYAN,
+    secondary="#7aa2f7",
+    accent=CYAN,
+    background="#0d1117",
+    surface="#11161f",
+    panel="#161c28",
+    foreground="#c9d1d9",
+    success=SUCCESS,
+    warning=WARNING,
+    error=ERROR,
+    dark=True,
+    variables={
+        "border": CYAN,
+        "border-blurred": "#1f2a3a",
+        "footer-key-foreground": CYAN,
+        "link-color": "#7aa2f7",
+    },
+)
+
+# klerk-light — daytime / projector palette (dark=False).
+KLERK_LIGHT = Theme(
+    name="klerk-light",
+    primary="#b3008f",
+    secondary="#0e7490",
+    accent="#0e7490",
+    background="#f6f7fb",
+    surface="#ffffff",
+    panel="#eef0f6",
+    foreground="#1a1b26",
+    success="#1a7f4b",
+    warning="#b45309",
+    error="#be123c",
+    dark=False,
+    variables={"border": "#b3008f", "link-color": "#0e7490"},
+)
+
+# Registered in order; the first is the default. The built-in command palette's
+# "Change theme" entry switches between them live (Textual ≥8).
+KLERK_THEMES = [KLERK_THEME, KLERK_SLATE, KLERK_LIGHT]
+
+
 # Shared app CSS (kept tiny — most styling rides the theme variables) ----------
 STUDIO_CSS = """
 Screen {

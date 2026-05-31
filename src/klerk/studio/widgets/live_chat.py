@@ -48,11 +48,24 @@ class LiveChat(Container):
         color: $primary;
     }
     LiveChat #chat-loader.-busy { display: block; }
-    LiveChat .user-msg {
+    LiveChat .human-message {
+        width: 1fr; height: auto;
+        border: round $primary 60%;
+        border-title-color: $primary;
+        padding: 0 1;
+        margin: 1 1 0 1;
         color: $secondary;
-        text-style: bold;
-        margin-top: 1;
     }
+    LiveChat .assistant-message {
+        width: 1fr; height: auto;
+        border: round $accent 60%;
+        border-title-color: $accent;
+        padding: 0 1;
+        margin: 0 1;
+        transition: background 200ms, border 200ms;
+    }
+    LiveChat .assistant-message.-streaming { background: $accent 8%; }
+    LiveChat .assistant-message:focus-within { border: round $accent; }
     LiveChat .tool-card {
         border: round $accent;
         margin: 0 2;
@@ -107,9 +120,12 @@ class LiveChat(Container):
             return
         inp = self.query_one("#chat-input", Input)
         inp.value = ""
-        await self._mount(Static(f"❯ {query}", classes="user-msg"))
+        human = Static(query, classes="human-message")
+        human.border_title = "you"
+        await self._mount(human)
         self._answer_buf = ""
-        self._answer_md = Markdown("")
+        self._answer_md = Markdown("", classes="assistant-message -streaming")
+        self._answer_md.border_title = "klerk"
         await self._mount(self._answer_md)
         self._set_busy(True)
         if self.mode == "full":
@@ -156,6 +172,8 @@ class LiveChat(Container):
             await self._mount(Static(tail, classes="meta"))
         elif event == "done":
             self._set_busy(False)
+            if self._answer_md is not None:
+                self._answer_md.remove_class("-streaming")
             await self._mount(
                 Static(
                     f"[dim]done · {data.get('tool_hops', 0)} hop(s) · "
@@ -165,6 +183,8 @@ class LiveChat(Container):
             )
         elif event == "error":
             self._set_busy(False)
+            if self._answer_md is not None:
+                self._answer_md.remove_class("-streaming")
             await self._mount(
                 Static(f"[b red]error:[/b red] {data.get('detail', '?')}", classes="meta")
             )

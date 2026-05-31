@@ -33,9 +33,10 @@ from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Container, Grid, VerticalScroll
 from textual.widget import Widget
+from textual.widgets import Footer
 
 from klerk.studio.splash import SplashScreen
-from klerk.studio.theme import KLERK_THEME, STUDIO_CSS
+from klerk.studio.theme import KLERK_THEME, KLERK_THEMES, STUDIO_CSS
 from klerk.studio.widgets import (
     ActivityTable,
     FilesTree,
@@ -129,6 +130,7 @@ class KlerkStudio(App):
         mode: str = "lite",
         base_url: str = "http://localhost:8000",
         locale: str = "en",
+        theme: str = KLERK_THEME.name,
         lite_layout: bool = False,
         show_splash: bool = True,
         show_bonus: bool = True,
@@ -138,6 +140,7 @@ class KlerkStudio(App):
         self.mode = mode
         self.base_url = base_url
         self.locale = locale
+        self._theme_name = theme
         self._force_lite_layout = lite_layout
         self._show_splash = show_splash
         self._show_bonus = show_bonus
@@ -175,10 +178,17 @@ class KlerkStudio(App):
                     yield TracesPanel(id="traces-pane")
                     if self._show_bonus:
                         yield from _bonus_widgets()
+        yield Footer()
 
     def on_mount(self) -> None:
-        self.register_theme(KLERK_THEME)
-        self.theme = KLERK_THEME.name
+        for theme in KLERK_THEMES:
+            self.register_theme(theme)
+        # Honor --theme; fall back to the default if an unknown name is passed.
+        self.theme = (
+            self._theme_name
+            if self._theme_name in self.available_themes
+            else KLERK_THEME.name
+        )
         if self._show_splash:
             self.push_screen(SplashScreen())
 
@@ -196,10 +206,11 @@ def run(
     base_url: str = "http://localhost:8000",
     locale: str = "en",
     compact: bool = False,
+    theme: str = KLERK_THEME.name,
 ) -> None:
     """Run the terminal TUI (the ``klerk studio`` entry point)."""
     KlerkStudio(
-        mode=mode, base_url=base_url, locale=locale, lite_layout=compact
+        mode=mode, base_url=base_url, locale=locale, theme=theme, lite_layout=compact
     ).run()
 
 
@@ -242,12 +253,19 @@ def main() -> None:
     parser.add_argument("--mode", default="lite", choices=["lite", "full"])
     parser.add_argument("--base-url", default="http://localhost:8000")
     parser.add_argument("--locale", default="en")
+    parser.add_argument("--theme", default=KLERK_THEME.name, help="klerk-cyberpunk | klerk-slate | klerk-light")
     args = parser.parse_args()
 
     if args.serve:
         serve(mode="full", base_url=args.base_url)
         return
-    run(mode=args.mode, base_url=args.base_url, locale=args.locale, compact=args.compact)
+    run(
+        mode=args.mode,
+        base_url=args.base_url,
+        locale=args.locale,
+        compact=args.compact,
+        theme=args.theme,
+    )
 
 
 if __name__ == "__main__":
