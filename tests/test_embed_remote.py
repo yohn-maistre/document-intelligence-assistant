@@ -138,3 +138,50 @@ def test_rerank_fallback_respects_top_k(remote_env):
     passages = [{"chunk_id": str(i), "text": f"p{i}"} for i in range(5)]
     results = rerank.rerank("query", passages, top_k=2)
     assert [r.chunk_id for r in results] == ["0", "1"]
+
+
+# ─── HF Inference (feature-extraction) backend ────────────────────────────────
+def _hf_env(monkeypatch):
+    monkeypatch.setenv("KLERK_EMBED_BACKEND", "hf")
+    monkeypatch.setenv("HF_TOKEN", "hf_test")
+    monkeypatch.delenv("KLERK_EMBED_HF_URL", raising=False)
+
+
+def test_hf_backend_pooled_2d(monkeypatch):
+    """HF returns [N, 1024] sentence vectors → used directly, L2-normalized."""
+    _hf_env(monkeypatch)
+    captured = {}
+
+    def fake_post(url, headers=None, json=None, timeout=None):
+        captured["url"] = url
+        captured["auth"] = headers["Authorization"]
+        n = len(json["inputs"])
+        return _FakeResponse([[float(i + 1)] * EMBED_DIM for i in range(n)])
+
+    monkeypatch.setattr(httpx, "post", fake_post)
+    vecs = embed.embed_passages(["a", "b"])
+    assert vecs.shape == (2, EMBED_DIM)
+    np.testing.assert_allclose(np.linalg.norm(vecs, axis=1), 1.0, rtol=1e-5)
+    assert "BAAI/bge-m3" in captured["url"] and captured["auth"] == "Bearer hf_test"
+
+
+def test_hf_backend_token_level_3d_is_mean_pooled(monkeypatch):
+    """HF returns [N, seq, 1024] token vectors → mean-pooled to [N, 1024]."""
+    _hf_env(monkeypatch)
+
+    def fake_post(url, headers=None, json=None, timeout=None):
+        # one input, 3 tokens, 1024 dims
+        return _FakeResponse([[[1.0] * EMBED_DIM, [3.0] * EMBED_DIM, [5.0] * EMBED_DIM]])
+
+    monkeypatch.setattr(httpx, "post", fake_post)
+    v = embed.embed_query("hello")
+    assert v.shape == (EMBED_DIM,)
+    np.testing.assert_allclose(np.linalg.norm(v), 1.0, rtol=1e-5)
+
+
+def test_hf_backend_requires_token(monkeypatch):
+    monkeypatch.setenv("KLERK_EMBED_BACKEND", "hf")
+    for k in ("HF_TOKEN", "HUGGING_FACE_HUB_TOKEN", "KLERK_EMBED_HF_KEY"):
+        monkeypatch.delenv(k, raising=False)
+    with pytest.raises(RuntimeError, match="HF token"):
+        embed.embed_query("x")

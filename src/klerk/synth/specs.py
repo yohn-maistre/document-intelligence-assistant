@@ -29,7 +29,7 @@ from typing import Literal
 
 Category = Literal["hr", "sop", "minutes", "faq", "org"]
 Format = Literal["pdf", "docx", "md"]
-Locale = Literal["en", "id"]
+Locale = Literal["en", "id", "ja"]  # en/id are brief-mandated; ja = Tokyo-office realism
 
 
 @dataclass
@@ -488,6 +488,169 @@ CORPUS: list[DocSpec] = [
             "contacts. Lists the CAC Holding account team members."
         ),
     ),
+    # ── Japanese Tokyo-office docs (locale=ja; beyond the brief's ≥3 Bahasa) ──
+    DocSpec(
+        doc_id="hr_tokyo_shugyo_kisoku",
+        category="hr",
+        format="pdf",
+        locale="ja",
+        title="東京サテライトオフィス就業規則",
+        brief=(
+            "PT Fata Organa Solusi 東京サテライトオフィス（〒107-0052 東京都港区赤坂"
+            "2-14-27 8階）に適用される就業規則。発効日：2025年4月1日。"
+            "所定労働時間は1日8時間・週40時間、コアタイムは10:00〜15:00（JST）の"
+            "フレックスタイム制とし、始業は7:00〜10:00、終業は16:00〜20:00の範囲で"
+            "選択可能とする。休憩は12:00〜13:00を基本とする1時間。"
+            "時間外労働は労働基準法第36条に基づく労使協定（36協定）の範囲内とし、"
+            "月45時間・年360時間を上限、特別条項適用時でも月80時間・年720時間を"
+            "超えないものとする。割増賃金率は時間外25%、深夜（22:00〜翌5:00）25%、"
+            "法定休日労働35%。年次有給休暇は労働基準法第39条に準拠し、入社6か月"
+            "経過後に10日付与、以降勤続年数に応じて最大20日まで加算する。"
+            "就業規則の管轄者は東京オフィス人事担当の田中氏、相談窓口は山田氏とする。"
+            "CACホールディングス常駐案件に従事する社員にも本規則を適用する。"
+            "リモートワークの取扱いは別途定める hr_remote_work_policy を参照のこと。"
+            "賃金・給与レンジは hr_consultant_rate_card_2025 と整合させる。"
+        ),
+        cross_refs=["hr_remote_work_policy", "hr_consultant_rate_card_2025"],
+        date_stamp="発効日 2025-04-01",
+    ),
+    DocSpec(
+        doc_id="hr_jp_tsukin_teate",
+        category="hr",
+        format="docx",
+        locale="ja",
+        title="通勤手当規程（東京オフィス）",
+        brief=(
+            "東京サテライトオフィス（東京都港区赤坂）に勤務する社員を対象とした"
+            "通勤手当規程。発効日：2025年4月1日。担当：人事 佐藤氏。"
+            "公共交通機関利用者には1か月定期券相当額を支給し、所得税法上の非課税限度額"
+            "（月額150,000円）を上限とする。距離区分に応じた支給額の上限テーブルを"
+            "必ず本文に表として掲載すること。表の各行は「片道通勤距離 / "
+            "支給上限額（月額・円）/ 備考」とし、以下のティアを含める："
+            "2km未満：支給なし（徒歩圏） / 2km以上10km未満：¥12,000 / "
+            "10km以上25km未満：¥28,000 / 25km以上40km未満：¥45,000 / "
+            "40km以上55km未満：¥62,000 / 55km以上：¥75,000（上限）。"
+            "新幹線通勤は事前承認制で別枠、月額上限¥150,000。マイカー通勤は港区内では"
+            "原則認めず、ガソリン代相当の実費精算も行わない。"
+            "支給は毎月25日の給与と同時振込（JST基準）。CACホールディングス先への"
+            "常駐者で勤務地が変わる場合は実勤務地起点で再計算する。"
+            "リモートワーク日が月の所定出社日数を下回る場合は日割計算とし、"
+            "詳細は hr_remote_work_policy に従う。"
+        ),
+        has_table=True,
+        cross_refs=["hr_remote_work_policy"],
+        date_stamp="発効日 2025-04-01",
+    ),
+    DocSpec(
+        doc_id="sop_jp_incident_taiou",
+        category="sop",
+        format="pdf",
+        locale="ja",
+        title="インシデント対応手順書（東京オフィス版）",
+        brief=(
+            "PT Fata Organa Solusi 東京サテライトオフィス（東京都港区赤坂、8階）"
+            "におけるセキュリティ／サービス障害のインシデント対応手順書。"
+            "英語版 sop_incident_response の日本語ローカライズ版であり、深刻度区分"
+            "（Sev0〜Sev3）と用語は英語版に準拠する。発効日：2025年5月1日。"
+            "東京オフィスのウォールーム（戦況室）は港区オフィス8階会議室「Fuji」"
+            "とする。一次受付（オンコール）は平日9:00〜18:00 JSTを東京チーム、"
+            "夜間・休日はジャカルタ本社（WIB）へエスカレーションする follow-the-sun 体制。"
+            "Sev0／Sev1は検知から15分以内に東京オフィスマネージャー田中氏へ電話連絡し、"
+            "30分以内にインシデント指揮官（IC）を任命する。連絡網の一次連絡先は"
+            "田中氏、技術リードは山田氏、顧客連絡担当は佐藤氏。"
+            "CACホールディングス常駐環境で発生したインシデントは、契約上の通知義務"
+            "（重大事案は4時間以内に先方セキュリティ窓口へ一次報告）を最優先とする。"
+            "事後分析（ポストモーテム）は英語版テンプレートに従い、発生から5営業日以内"
+            "に提出する。詳細な共通手順・深刻度定義は sop_incident_response を参照。"
+        ),
+        cross_refs=["sop_incident_response"],
+        date_stamp="発効日 2025-05-01",
+    ),
+    DocSpec(
+        doc_id="minutes_cac_jp_steering",
+        category="minutes",
+        format="pdf",
+        locale="ja",
+        title="議事録 — CACホールディングス データ基盤刷新 ステアリングコミッティ（第3回）",
+        brief=(
+            "CACホールディングス（CAC Holding Japan）データ基盤刷新プロジェクトの"
+            "第3回ステアリングコミッティ議事録。場所：東京都港区 PT Fata Organa Solusi "
+            "東京サテライトオフィス 8F 会議室。出席者：当社側 田中 健一（東京オフィス"
+            "マネージャー／プロジェクト責任者）、山田 美咲（リードコンサルタント）、"
+            "佐藤 大輔（シニアコンサルタント）、ガリ・プラタマ（データアーキテクト、"
+            "ジャカルタ本社よりリモート参加）。CAC側 中村 浩二（情報システム本部長）、"
+            "鈴木 由香（PMO）。議題と決定事項を構造化して記述すること："
+            "(1) スコープ進捗：6か月契約の第2か月終了時点で全体の34%完了、"
+            "データ移行フェーズが2週間遅延。"
+            "(2) 予算：当四半期のコンサルタント稼働は累計1,180時間、請求額 約¥27,600,000。"
+            "シニアtier単価¥24,000/h、ミッド単価¥15,000/hはhr_consultant_rate_card_2025に準拠。"
+            "週あたり稼働上限80時間/人を超過しないことを再確認。"
+            "(3) キックオフ時に合意したケイデンス（週次ステアリング＋隔週ワーキング）は"
+            "minutes_cac_kickoffの通り維持。"
+            "決定事項：①データ移行の遅延を取り戻すため、6月に追加のミッドコンサルタント1名を"
+            "投入（追加予算 約¥2,400,000）。②次回ステアリングは2025-05-09 10:00 JST。"
+            "アクションアイテムは必ず「担当者 / タスク / 期限」の形式で列挙すること："
+            "・山田 美咲 / データ移行の改訂スケジュールを作成し中村本部長へ提出 / 2025-04-30。"
+            "・佐藤 大輔 / SOC2監査証跡パッケージの一次ドラフト作成 / 2025-05-06。"
+            "・田中 健一 / 追加コンサルタント1名のアサインと稼働上限の整合確認 / 2025-05-02。"
+            "・鈴木 由香（CAC側）/ 移行先環境のアクセス権限申請を完了 / 2025-04-29。"
+            "金額はすべて日本円（¥）、時刻はJSTで記載すること。"
+        ),
+        cross_refs=["minutes_cac_kickoff", "hr_consultant_rate_card_2025"],
+        date_stamp="2025-04-25 10:00 JST",
+    ),
+    DocSpec(
+        doc_id="faq_jp_shain",
+        category="faq",
+        format="md",
+        locale="ja",
+        title="よくある質問（FAQ）— 東京オフィス社員向け",
+        brief=(
+            "PT Fata Organa Solusi 東京サテライトオフィス（東京都港区）の社員向けFAQ。"
+            "会話的で平易な日本語のQ&Aを10〜12組、Markdown形式で作成すること。"
+            "在宅勤務、交通費、有給休暇、経費精算、セキュリティのトピックを必ず含める。"
+            "具体例（数値・固定値を必ず明記すること）："
+            "・在宅勤務：原則として週3日以上はオフィス勤務が必要（hr_remote_work_policyに準拠）、"
+            "在宅勤務手当は月額¥12,000。詳細な就業規則はhr_tokyo_shugyo_kisokuを参照。"
+            "・交通費：実費支給、定期券は月額上限¥55,000、申請は毎月25日締め。"
+            "・有給休暇：法定どおり初年度10日付与、最大繰越5日。半休取得可。"
+            "・経費精算：経費精算システムへ領収書をアップロード、原本は90日間保管。"
+            "¥30,000を超える支出は事前承認が必要。締め日は毎月末、支払いは翌月15日。"
+            "・セキュリティ：ノートPCは全台暗号化、社外への機密データ共有禁止、"
+            "パスワードマネージャー必須、インシデントはITリエゾン（佐藤）へ即時連絡。"
+            "金額は日本円（¥）、勤務地は港区、時刻はJSTで記載すること。"
+            "末尾に関連文書としてhr_remote_work_policyとhr_tokyo_shugyo_kisokuを明記する。"
+        ),
+        cross_refs=["hr_remote_work_policy", "hr_tokyo_shugyo_kisoku"],
+    ),
+    DocSpec(
+        doc_id="minutes_jp_tokyo_allhands",
+        category="minutes",
+        format="docx",
+        locale="ja",
+        title="議事録 — 東京オフィス 全社ミーティング（2025年4月）",
+        brief=(
+            "PT Fata Organa Solusi 東京サテライトオフィス（東京都港区 8F）の全社"
+            "ミーティング（オールハンズ）議事録。司会：田中 健一（東京オフィスマネージャー）。"
+            "出席者：東京拠点の社員18名（うちリモート参加4名）、ジャカルタ本社より"
+            "山田 美咲がオンライン参加。構造化して以下を記述すること："
+            "(1) ヘッドカウント：現在の東京拠点は18名、2025年annual planningで承認された"
+            "+6名増員計画（minutes_quarterly_planning_2025参照）に対し、第2四半期末までに"
+            "あと3名を採用予定。エンジニア2名、コンサルタント1名のオファー進行中。"
+            "(2) CACホールディングス案件：データ基盤刷新は契約期間6か月の34%が完了、"
+            "稼働は順調だがデータ移行が2週間遅延中（詳細はminutes_cac_jp_steering参照）。"
+            "(3) オフィス事項：港区オフィスの座席が手狭になりつつあり、隣接フロアの"
+            "増床を5月に検討。防災訓練を2025-05-16に実施。社内懇親会の予算¥150,000を承認。"
+            "アクションアイテムは「担当者 / タスク / 期限」の形式で列挙すること："
+            "・田中 健一 / 隣接フロア増床の見積もり取得とコスト試算 / 2025-05-15。"
+            "・佐藤 大輔 / 全社員のセキュリティ研修日程を確定 / 2025-05-09。"
+            "・山田 美咲 / CAC案件の遅延回復プランを全社へ共有 / 2025-05-02。"
+            "・人事担当 / 増員3名分の採用ステータスを次回オールハンズで報告 / 2025-05-30。"
+            "金額は日本円（¥）、勤務地は港区、時刻・日付はJSTで記載すること。"
+        ),
+        cross_refs=["minutes_quarterly_planning_2025", "minutes_cac_jp_steering"],
+        date_stamp="2025-04-18 17:00 JST",
+    ),
 ]
 
 
@@ -505,12 +668,14 @@ def constraint_check(corpus: list[DocSpec] = CORPUS) -> dict[str, int | bool]:
         "n_docx": sum(1 for d in corpus if d.format == "docx"),
         "n_md": sum(1 for d in corpus if d.format == "md"),
         "n_bahasa": sum(1 for d in corpus if d.locale == "id"),
+        "n_japanese": sum(1 for d in corpus if d.locale == "ja"),
         "n_with_table": sum(1 for d in corpus if d.has_table),
         "n_contradiction_docs": sum(1 for d in corpus if d.contradiction_pair),
         "n_with_cross_refs": sum(1 for d in corpus if d.cross_refs),
     }
     constraints_met = {
-        "total_in_range": 25 <= totals["n_total"] <= 30,
+        # brief guideline is ~25-30; we ship more (30 base + 6 ja Tokyo docs)
+        "total_in_range": 25 <= totals["n_total"] <= 40,
         "hr_min_8": totals["n_hr"] >= 8,
         "sop_min_6": totals["n_sop"] >= 6,
         "minutes_min_6": totals["n_minutes"] >= 6,

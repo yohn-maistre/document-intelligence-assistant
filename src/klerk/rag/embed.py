@@ -229,6 +229,94 @@ class RemoteOpenAICompat(EmbedBackend):
         return f"remote:{model}"
 
 
+# ─── HuggingFace Inference (feature-extraction) backend ───────────────────────
+def _hf_config() -> tuple[str, str, str]:
+    """Resolve (url, api_key, model) for the HF feature-extraction backend.
+
+    Auth falls back to the standard HF token envs, so a deployment that already
+    set HF_TOKEN (for model downloads) gets remote embeddings for free.
+    """
+    model = os.environ.get("KLERK_EMBED_HF_MODEL", MODEL_NAME).strip() or MODEL_NAME
+    key = (
+        os.environ.get("KLERK_EMBED_HF_KEY")
+        or os.environ.get("HF_TOKEN")
+        or os.environ.get("HUGGING_FACE_HUB_TOKEN")
+        or ""
+    ).strip()
+    url = os.environ.get("KLERK_EMBED_HF_URL", "").strip() or (
+        f"https://router.huggingface.co/hf-inference/models/{model}/pipeline/feature-extraction"
+    )
+    if not key:
+        raise RuntimeError(
+            "hf embed backend requires an HF token — set HF_TOKEN (or "
+            "KLERK_EMBED_HF_KEY). See .env.example."
+        )
+    return url, key, model
+
+
+class HFInference(EmbedBackend):
+    """Dense embeddings via HuggingFace Inference *feature-extraction*.
+
+    HF doesn't speak the OpenAI `/embeddings` shape; it returns the raw
+    feature-extraction output, which is either ``[N, dim]`` sentence vectors
+    (BGE-M3 is pooled) or ``[N, seq, dim]`` token vectors that we mean-pool.
+    We normalize either into the (N, 1024) L2-normalized contract LanceDB
+    expects. Reuses the HF token; ideal for the lite / phone path where HF is
+    reachable but a 1.2GB local download isn't. Dense-only — no ColBERT head,
+    so the reranker falls back to RRF order.
+    """
+
+    name = "hf"
+
+    def _embed(self, texts: list[str]) -> np.ndarray:
+        import httpx
+
+        url, key, model = _hf_config()
+        resp = httpx.post(
+            url,
+            headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+            json={"inputs": texts, "options": {"wait_for_model": True}},
+            timeout=120.0,  # generous — HF may cold-start the model
+        )
+        resp.raise_for_status()
+        arr = np.asarray(resp.json(), dtype=np.float32)
+        # Normalize shape → (N, dim):
+        #   (dim,)          single vector
+        #   (N, dim)        sentence embeddings (BGE-M3 is pooled)
+        #   (N, seq, dim)   token-level → mean-pool over the sequence axis
+        if arr.ndim == 1:
+            arr = arr[None, :]
+        elif arr.ndim == 3:
+            arr = arr.mean(axis=1)
+        if arr.ndim != 2 or arr.shape[1] != EMBED_DIM:
+            raise RuntimeError(
+                f"HF model '{model}' returned shape {arr.shape}, expected (N, {EMBED_DIM}); "
+                "check KLERK_EMBED_HF_MODEL / KLERK_EMBED_HF_URL"
+            )
+        norms = np.linalg.norm(arr, axis=1, keepdims=True)
+        norms[norms == 0] = 1.0
+        return (arr / norms).astype(np.float32)
+
+    def embed_passages(self, texts: list[str], *, batch_size: int = 12) -> np.ndarray:
+        # HF serverless caps payload size — chunk to stay under it.
+        chunks = [self._embed(texts[i : i + batch_size]) for i in range(0, len(texts), batch_size)]
+        return (
+            np.concatenate(chunks, axis=0)
+            if chunks
+            else np.zeros((0, EMBED_DIM), dtype=np.float32)
+        )
+
+    def embed_query(self, text: str) -> np.ndarray:
+        return self._embed([text])[0]
+
+    def embed_with_colbert(self, texts: list[str], *, batch_size: int = 12) -> list[np.ndarray]:
+        raise RuntimeError("ColBERT vectors unavailable in HF inference mode")
+
+    def warm(self) -> str:
+        _, _, model = _hf_config()
+        return f"hf:{model}"
+
+
 # ─── Mock backend ─────────────────────────────────────────────────────────────
 def _mock_vector(text: str) -> np.ndarray:
     """Deterministic pseudo-embedding: BM25-ish token hashing into EMBED_DIM dims."""
@@ -272,6 +360,7 @@ class MockEmbed(EmbedBackend):
 _BACKENDS: dict[str, type[EmbedBackend]] = {
     "local": LocalBGE,
     "remote": RemoteOpenAICompat,
+    "hf": HFInference,
     "mock": MockEmbed,
 }
 
@@ -284,7 +373,7 @@ def get_backend(name: str | None = None) -> EmbedBackend:
     except KeyError:
         raise RuntimeError(
             f"unknown KLERK_EMBED_BACKEND={resolved!r}; "
-            f"expected one of: remote, local, mock"
+            f"expected one of: local, remote, hf, mock"
         ) from None
     return cls()
 
