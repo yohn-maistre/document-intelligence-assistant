@@ -6,10 +6,13 @@ artefacts. The floor (always ships) is five panes wired per v7 D6:
     ┌──────────────── status bar (model · drive · WIB · ctx) ────────────────┐
     │ files  │            live chat (in-process / SSE)            │ activity │
     │        │                                                    │ traces   │
+    │        │                                                    │ [bonus]  │
     └────────┴────────────────────────────────────────────────────┴─────────┘
 
-Bonus panes (eval / kg / sparklines) mount only when present and the floor is
-green (cut order: eval → kg → sparklines).
+The right rail is a scrollable column: activity + traces (floor) followed by
+the bonus panes (eval → kg → sparklines) when ``show_bonus`` is set. Each
+bonus pane degrades to a hint when its data source is empty, so the floor is
+never blocked by a missing eval run / KG / metrics.
 
 Two run paths:
 
@@ -27,7 +30,8 @@ from typing import Any
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.containers import Container, Grid
+from textual.containers import Container, Grid, VerticalScroll
+from textual.widget import Widget
 
 from klerk.studio.splash import SplashScreen
 from klerk.studio.theme import KLERK_THEME, STUDIO_CSS
@@ -42,6 +46,35 @@ from klerk.studio.widgets import (
 NARROW_COLS = 120
 
 
+def _bonus_widgets() -> list[Widget]:
+    """Instantiate the bonus panes (eval → kg → sparklines), guarded.
+
+    Each is best-effort and renders a hint when its data source is empty, so
+    they are always safe to mount. Import failures are swallowed so a missing
+    optional dependency never breaks the floor.
+    """
+    out: list[Widget] = []
+    try:
+        from klerk.studio.widgets.eval_panel import EvalPanel
+
+        out.append(EvalPanel(id="eval-pane"))
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        from klerk.studio.widgets.kg_snapshot import KgSnapshot
+
+        out.append(KgSnapshot(id="kg-pane"))
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        from klerk.studio.widgets.graph import SparkGraph
+
+        out.append(SparkGraph(id="spark-pane"))
+    except Exception:  # noqa: BLE001
+        pass
+    return out
+
+
 class KlerkStudio(App):
     """The floor dashboard. Composes the five floor panes in a Grid."""
 
@@ -49,13 +82,16 @@ class KlerkStudio(App):
         STUDIO_CSS
         + """
     #studio-grid {
-        grid-size: 3 2;
-        grid-columns: 28 1fr 32;
-        grid-rows: 1fr 1fr;
+        grid-size: 3 1;
+        grid-columns: 28 1fr 34;
         grid-gutter: 0 0;
     }
-    #files-pane { row-span: 2; }
-    #chat-pane { row-span: 2; }
+    #right-rail { height: 1fr; }
+    #right-rail > ActivityTable { height: 14; }
+    #right-rail > TracesPanel { height: 9; }
+    #right-rail > EvalPanel { height: 12; }
+    #right-rail > KgSnapshot { height: 14; }
+    #right-rail > SparkGraph { height: 16; }
     #lite-root { height: 1fr; }
     """
     )
@@ -77,6 +113,7 @@ class KlerkStudio(App):
         locale: str = "en",
         lite_layout: bool = False,
         show_splash: bool = True,
+        show_bonus: bool = True,
         **kwargs: Any,
     ) -> None:
         super().__init__(**kwargs)
@@ -85,6 +122,7 @@ class KlerkStudio(App):
         self.locale = locale
         self._force_lite_layout = lite_layout
         self._show_splash = show_splash
+        self._show_bonus = show_bonus
 
     @property
     def _use_lite_layout(self) -> bool:
@@ -116,8 +154,11 @@ class KlerkStudio(App):
                     locale=self.locale,
                     id="chat-pane",
                 )
-                yield ActivityTable(id="activity-pane")
-                yield TracesPanel(id="traces-pane")
+                with VerticalScroll(id="right-rail"):
+                    yield ActivityTable(id="activity-pane")
+                    yield TracesPanel(id="traces-pane")
+                    if self._show_bonus:
+                        yield from _bonus_widgets()
 
     def on_mount(self) -> None:
         self.register_theme(KLERK_THEME)

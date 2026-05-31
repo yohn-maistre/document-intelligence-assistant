@@ -226,6 +226,67 @@ async def test_traces_panel_composes(monkeypatch, tmp_path) -> None:
         assert app.query(TracesPanel)
 
 
+@pytest.mark.asyncio
+async def test_bonus_panes_mount_and_degrade(tmp_path, monkeypatch) -> None:
+    """Bonus panes mount in the right rail and render hints with no data."""
+    from klerk.studio.widgets.eval_panel import EvalPanel
+    from klerk.studio.widgets.graph import SparkGraph
+    from klerk.studio.widgets.kg_snapshot import KgSnapshot
+
+    monkeypatch.setenv("KLERK_STATE_DIR", str(tmp_path))
+    monkeypatch.setenv("KLERK_KG_DIR", str(tmp_path / "kg"))
+    app = KlerkStudio(mode="lite", show_splash=False, show_bonus=True)
+    async with app.run_test(size=(160, 60)):
+        assert app.query(EvalPanel)
+        assert app.query(KgSnapshot)
+        assert app.query(SparkGraph)
+
+
+@pytest.mark.asyncio
+async def test_eval_panel_reads_rubric(tmp_path, monkeypatch) -> None:
+    runs = tmp_path / "eval-runs"
+    runs.mkdir()
+    (runs / "latest.json").write_text(
+        json.dumps(
+            {
+                "aggregate": {"overall": {"mean": 0.81, "confidence": 0.7}},
+                "ragas": {"aggregate": {"faithfulness": 0.9}},
+            }
+        )
+    )
+    monkeypatch.setenv("KLERK_STATE_DIR", str(tmp_path))
+    from textual.widgets import DataTable
+
+    from klerk.studio.widgets.eval_panel import EvalPanel
+
+    app = KlerkStudio(mode="lite", show_splash=False, show_bonus=True)
+    async with app.run_test(size=(160, 60)) as pilot:
+        await pilot.pause()
+        panel = app.query_one(EvalPanel)
+        dt = panel.query_one(DataTable)
+        assert dt.row_count >= 1
+
+
+def test_bonus_builder_swallows_import_errors(monkeypatch) -> None:
+    """A broken bonus import must not break the floor."""
+    import builtins
+
+    real_import = builtins.__import__
+
+    def fake_import(name, *args, **kwargs):
+        if "kg_snapshot" in name:
+            raise ImportError("boom")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", fake_import)
+    from klerk.studio import app as studio_app
+
+    widgets = studio_app._bonus_widgets()
+    # eval + sparklines still present; kg dropped, no exception raised.
+    names = {type(w).__name__ for w in widgets}
+    assert "KgSnapshot" not in names
+
+
 def test_serve_guarded_without_textual_serve(monkeypatch) -> None:
     """serve() raises an actionable error when textual-serve is absent."""
     import builtins
