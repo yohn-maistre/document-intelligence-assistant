@@ -45,8 +45,10 @@ data/kg
 !.env.example
 .secrets
 
-# Experimental (TypeScript shell + Pi extension; not part of the runtime)
+# Experimental (demoted Python spikes; not part of the runtime). The TS shell
+# + Pi extension were archived to docs/explorations/ts-archive/ in v7.
 experimental
+docs
 node_modules
 *.tsbuildinfo
 
