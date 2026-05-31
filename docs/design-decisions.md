@@ -312,6 +312,23 @@ The **LLM itself is never downloaded** — generation always routes out to the
 configured gateway. Only the *embedding* model is local (and only in `local`/full
 mode).
 
+**Evaluated and not switched: Qwen3-Embedding-0.6B (2026).** Qwen3-Embedding-0.6B
+(June 2025, Apache-2.0) is a strong same-weight-class alternative — native 1024-d
+(Matryoshka-truncatable, fits our schema), 32K context, explicit Indonesian + JA
+coverage, and it beats BGE-M3 on MTEB-Multilingual (mean ~64.3 vs ~59.6; retrieval
+nDCG ~64.6 vs ~54.6). We **stayed on BGE-M3** anyway, for one decisive reason:
+BGE-M3 yields **dense + sparse + ColBERT from a single model load**, and klerk's
+reranker reuses that *co-resident* ColBERT head at ~zero extra RAM. Qwen3-Embedding
+is **dense-only**, so matching our reranking means adding a *second* ~0.6B model
+(Qwen3-Reranker-0.6B) → ~2.4 GB resident, which is hostile to the ~1.5 GB lite/phone
+target. The multilingual quality edge is real but modest and partly clawed back by
+that second model; ID **and** JA are covered by both, so there's no coverage gap
+forcing a move. Qwen3-Embedding is a clean **opt-in dense backend** to add later
+for GPU / roomy-Docker deployments (the `EmbedBackend` ABC + RRF-fallback rerank
+already support a dense-only backend). Revisit if the corpus needs 32K-token
+single-chunk context or a GPU deployment makes the +5 multilingual worth a second
+model. (Aside: BGE-M3 is **MIT**-licensed, even more permissive than Apache-2.0.)
+
 ### v7-5. Install profiles — a torch-free lite base
 
 **Decision:** the base `dependencies` are the **lite runtime** (no torch, no
