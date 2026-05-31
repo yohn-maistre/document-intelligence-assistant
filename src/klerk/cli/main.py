@@ -213,23 +213,17 @@ def _phoenix_section() -> None:
         )
 
 
-# ─── Chat passthrough (h19.5–22 wires this to klerk-cli/Pi) ─────────────────
+# ─── Chat: focused chat-only view of the studio cockpit ─────────────────────
 @app.command()
 def chat(
     locale: Annotated[str, typer.Option("--locale", "-l", help="en | id")] = "en",
+    mode: Annotated[str, typer.Option("--mode", help="Engine mode: 'lite' (in-process orchestrator) or 'full' (SSE to /chat).")] = "lite",
+    base_url: Annotated[str, typer.Option("--base-url", help="FastAPI base URL used by 'full' mode.")] = "http://localhost:8000",
 ) -> None:
-    """Open the klerk chat REPL (delegates to klerk-cli; Pi runs hidden).
+    """Open the klerk chat TUI — a focused, chat-only view of the studio cockpit."""
+    from klerk.studio import app as studio_app
 
-    Until h19.5, this prints a placeholder.
-    """
-    _ = locale
-    console.print(
-        Panel.fit(
-            "[bold]klerk chat[/bold] is wired in h19.5–22.\n"
-            "Until then, use the verbs: [cyan]klerk ask[/cyan] / [cyan]klerk write[/cyan].",
-            border_style="dim",
-        )
-    )
+    studio_app.run(mode=mode, base_url=base_url, locale=locale, lite=True)
 
 
 # ── memory (Hermes trio: SOUL.md + MEMORY.md + LanceDB recall) ───────────────
