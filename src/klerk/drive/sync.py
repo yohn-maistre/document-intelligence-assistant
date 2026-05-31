@@ -555,6 +555,20 @@ def upload_directory(
         if dry_run:
             report.results.append(UploadResult(str(path), path.name, None, "dry-run"))
             continue
-        file_id = upload_file(path, folder_id, service=service)
+        try:
+            file_id = upload_file(path, folder_id, service=service)
+        except Exception as e:  # noqa: BLE001 - translate the SA-quota 403 to a clear hint
+            if "storagequota" in str(e).lower().replace(" ", ""):
+                raise RuntimeError(
+                    "Drive upload failed: a Service Account has NO storage quota, so it "
+                    "cannot create files in a personal Drive folder — even one shared "
+                    "with it as Editor (the SA would own the file). Options:\n"
+                    f"  1. Upload the files manually (web UI / rclone) — they're in '{src_path}'.\n"
+                    "  2. Use a Google Workspace Shared Drive (point DRIVE_FOLDER_ID at it).\n"
+                    "  3. Use OAuth user delegation (roadmap).\n"
+                    "klerk's /ingest (READ) path is unaffected — the SA can read a "
+                    "shared folder without quota."
+                ) from e
+            raise
         report.results.append(UploadResult(str(path), path.name, file_id, "uploaded"))
     return report
