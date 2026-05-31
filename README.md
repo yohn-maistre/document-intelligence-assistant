@@ -191,10 +191,10 @@ nothing is hardcoded. Key settings:
 | `KLERK_EMBED_BACKEND` | `local` (BGE-M3) · `remote` (OpenAI-compatible) · `mock` |
 | `GOOGLE_APPLICATION_CREDENTIALS`, `DRIVE_FOLDER_ID` | Drive service account + folder |
 
-**Install profiles:** `lite` (agent + remote embed — torch-free, smallest
-footprint) · `server` (FastAPI + dashboard) · `local` (local BGE-M3 +
-torch) · `parse` (layout-aware Docling parsing) · `full` (everything, the
-Docker default).
+**Install profiles:** `lite` (agent + remote embed — torch-free, ~190 pkgs) ·
+`synth` (corpus generator) · `server` (FastAPI + dashboard) · `local` (local
+BGE-M3 + torch) · `parse` (Docling) · `eval` (RAGAS) · `obs` (Phoenix) ·
+`mcp` (MCP server) · `full` (everything, the Docker default).
 
 ---
 

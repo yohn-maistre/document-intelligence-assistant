@@ -8,9 +8,12 @@
 
 ## 0. Prereqs
 ```bash
-git pull                      # get this branch
-uv sync --extra dev           # base + test deps
+git pull
+# Phone / constrained device — torch-free lite base + the corpus generator:
+uv sync --extra synth         # ~190 pkgs, no torch/ragas/phoenix
+# (Laptop running the full local-embed path instead: uv sync --extra dev --extra full)
 ```
+On a phone use `KLERK_EMBED_BACKEND=remote` (step 2) — there is no local model.
 
 ## 1. `.env` (gitignored — never commit)
 Copy `.env.example` → `.env` and fill from the Nemotron bundle's `config.env`
