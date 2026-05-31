@@ -124,7 +124,10 @@ def _call_llm(spec: DocSpec) -> DocBody:
         messages=messages,
         locale=spec.locale,
         temperature=0.4,
-        max_tokens=2200,
+        # nemotron-3-nano-omni is a reasoning model — it spends a chunk of the
+        # budget thinking before emitting the JSON. Give generous room (override
+        # with KLERK_SYNTH_MAX_TOKENS) so content-heavy docs don't truncate.
+        max_tokens=int(os.environ.get("KLERK_SYNTH_MAX_TOKENS", "6000")),
         response_format={"type": "json_object"},
     )
     text = response.choices[0].message.content or ""
