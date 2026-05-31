@@ -8,11 +8,11 @@
 
 **Project**: PT Fata Organa Solusi — Middle AI Engineer take-home. Document Intelligence Assistant for an Indonesian-Japanese tech firm (CAC Holding Japan as named client). RAG over a 25-30 doc synthetic corpus ingested from Google Drive, served via FastAPI, using the provided Nemotron proxy as the only LLM.
 
-**State**: ~60% brief-compliant. Strong on RAG primitives, Nemotron wiring, evaluation scaffolds, Textual Studio. **Missing the brief's pass/fail blockers**: FastAPI endpoints, Drive incremental sync, Docker, corpus, evaluation set, EVAL.md, DATA_GENERATION.md.
+**State**: brief floor fully satisfied on `main`. v6/Stack-D clusters 1-4 shipped via the RQYyt merge at commit `740cddd` (Hermes-style agentic `/chat` with LangGraph + 6 in-process tools + SessionStore sliding-window memory + doc_writer LangGraph sub-graph + PydanticAI migration + remote embed backend + Drive upload). **v7 polish phase pending** (memory trio + Bloomberg dashboard + Midday CLI verbs + dual-surface docs) — see **§13 + `.planning/v7-plan.md`** for the active workplan.
 
-**Today**: 2026-05-29. **Deadline**: 2026-09-30 (4 months). **Brief estimate**: 8-10h focused work. **Brief hard gate**: 25h max. **Target**: 18-22h actual = MVP + curated differentiators.
+**Today**: 2026-05-30 evening Jakarta (→ 2026-05-31). **Deadline**: 2026-05-31 morning Jakarta (recruiter-negotiated from the brief literal date 2026-09-30 to a near-term sprint; user confirmed via clarifying question 2026-05-30 evening). **Time remaining**: ~10h wall-clock across 4 parallel Opus 4.8 sessions ≈ ~30-40 agent-hours.
 
-**Branch**: `claude/agent-framework-planning-jJqQj` — clean working tree as of HEAD `bf8d2cb`. Merge to `main` only at submission time.
+**Branch**: `claude/agent-framework-planning-jJqQj` — at `740cddd`, identical to `main`. The RQYyt merge has already landed on `main` (merge commit, fast-forwarded planning branch to match). Subsequent v7 work continues on the planning branch until the final submission push.
 
 ---
 
@@ -623,9 +623,102 @@ pnpm ls --depth 0 | grep earendil
 # start at cluster 1, step 1.1 (remote embed backend)
 ```
 
-The full work breakdown + decision log + changelog lives in
-`.planning/v6-plan.md` (committed alongside this handoff).
+The v6 work breakdown + decision log now lives in `.planning/archive/v6-plan.md` (archived; clusters 1-4 shipped via the RQYyt merge `740cddd`, cluster 5 superseded by v7's Studio dashboard work). The stack-D migration doc that captured the Pi-2nd-surface pivot is at `.planning/archive/stack-d-migration.md` — superseded by v7's textual-serve replacement.
 
 ---
 
-*End of handoff. If you're a new session starting here: read sections 1-3 first, then 12 (v6 plan). Sections 4-6 are deep context. Sections 7-11 are v5 reference. Section 12 is the active workplan.*
+## 13. v7 plan — Hermes paradigm + dual-surface + D1-D6 strategy deltas (2026-05-30 evening)
+
+> **Active workplan.** Supersedes v6 (§12). Full plan committed at `.planning/v7-plan.md` alongside this handoff. This section captures the shift in approach + the six deltas + the resume path.
+
+### 13.1 Why v7 exists
+
+v6 / Stack-D shipped clusters 1-4 (the agentic `/chat`, multi-turn memory, PydanticAI migration, doc_writer sub-graph, remote embed, Drive upload) onto branch `claude/handoff-embed-backend-resume-RQYyt` and was merged into `main` at `740cddd`. **The brief floor is fully met by main alone.**
+
+A strategy-session review on 2026-05-30 evening surfaced six corrections to the v6 architecture that don't require rewriting any shipped code — they reframe what we build *next* and how we describe it. v7 captures those corrections + the polish phase that converts main into a differentiation-grade submission.
+
+### 13.2 The shift in approach (one paragraph)
+
+**v6 → v7**: keep the Python substrate; keep LangGraph for `scan_conflicts` and `doc_writer`; keep PydanticAI for typed one-shots; **drop the Pi 2nd surface entirely** (textual-serve gives terminal + browser TUI from one Python codebase, simpler than Pi + xterm.js); **add a Hermes-style long-term memory trio** (SOUL.md + MEMORY.md + LanceDB recall); **reframe the CLI verbs as the EXTERNAL tool contract** (Midday `--agent --json` pattern for Claude Code / cron / manual shell only) — explicitly **NOT** how the agent calls its own tools, which stay **in-process** Python imports via `src/klerk/agent/tools.py` (already shipped on main from RQYyt). One engine per deployment. The dashboard becomes a Bloomberg-style multi-pane Studio with explicit floor / bonus sequencing so the brief floor stays green even if every flex piece overruns.
+
+### 13.3 Six strategy deltas (D1-D6)
+
+| # | Delta | Rationale |
+|---|-------|-----------|
+| **D1** | Orchestrator tools are **in-process** Python function calls, not subprocess CLI shell-outs. One engine per deployment. `--agent --json` on CLI = **external** contract only (Claude Code, cron, manual shell). | Subprocess-per-tool-call pays Python startup + import cost on every invocation (and a `torch` reload if FlagEmbedding is on the path), which is fatal on the 600MB-1.5GB lite target. RQYyt's `tools.py` correctly implements in-process; v7 keeps and clarifies. |
+| **D2** | Drop `/internal/*` HTTP routes entirely. | textual-serve runs the Textual app as a server-side Python process with in-process engine access — no HTTP shim needed. The earlier "browser Studio can't subprocess-spawn" rationale misread textual-serve's architecture. |
+| **D3** | `/memory/*` HTTP routes are bonus, not floor. | CLI verbs (`klerk memory recall/save/show-soul/edit-soul`) + the TUI's in-process engine access cover memory ops. HTTP routes only matter for an external HTTP client that isn't klerk-aware — out of scope for the May 31 submission. |
+| **D4** | `doc_writer` (7-stage LangGraph) reframed as **beyond-brief bonus**. `scan_conflicts` (4-node LangGraph) is the **Brief Option C core flagship**. | The brief is a retrieval / QA assignment; there is no document-generation surface. doc_writer is impressive but off-target. Conflict Reporter maps directly to our 4-node LangGraph. README + EVAL label doc_writer honestly as "beyond brief" so the grader doesn't fault us. |
+| **D5** | All three brief options A/B/C implemented (Escalation + Action Items + Conflict Reporter). KG / drift / doc_writer labeled "beyond brief" in README + EVAL self-assessment. | Corpus naturally supports all three; implementation cost low. Tick all three boxes; explicit "beyond brief" line for the rest. |
+| **D6** | Studio dashboard **sequenced behind the brief floor**. Floor panes: Chat / Files / Activity / Status / Traces. Bonus panes: Eval / KG / Sparklines, with explicit cut order. | Brief warns about over-engineering deductions. Sequencing ensures the dock-and-ship state (brief floor + 5-pane studio) is green first; bonus panes are nice-to-have. If time pinches: drop eval → KG → sparklines in that order. |
+
+### 13.4 Repo state post-RQYyt merge
+
+Branch tips:
+- `main` @ `740cddd` — merge commit joining the v5 lineage + 4 docs commits with RQYyt's 6 code commits. Both lineages preserved in `git log --graph`.
+- `claude/agent-framework-planning-jJqQj` @ `740cddd` — fast-forwarded to match `main`. Continuing v7 work on this branch.
+
+Net delta from pre-RQYyt main (`d37b618 step 11`) to current main (`740cddd`):
+- +9 commits (3 docs shared between branches + 6 RQYyt code + 1 main-line docs + 1 merge)
+- +1,331 LOC src / +909 LOC tests
+- `/chat` now a Hermes-style agentic loop (LangGraph `create_react_agent` + 6 **in-process** tools + SessionStore sliding-window memory)
+- doc_writer 7-stage LangGraph (`klerk write`) wired
+- PydanticAI for action_items / kg_extract / contradiction.judge_pair
+- Remote embed backend + RRF-only rerank fallback
+- Drive upload with `--dry-run`
+- 17 test files / 2,871 LOC tests
+
+### 13.5 Phase A — Tonight (~5h wall, ~15-20 agent-hours)
+
+Five parallel Opus 4.8 sessions, non-overlapping file sets:
+
+- **S1** — Midday CLI `--agent --json` decorator (`src/klerk/cli/_agent_flag.py`) + apply across ~13 verbs + NEW verbs: `klerk extract-actions` (Brief Option B) and `klerk escalate draft` (Brief Option A) + tests.
+- **S2** — Memory trio: `src/klerk/memory/{__init__.py, store.py}` (SOUL.md / MEMORY.md / LanceDB `memory_v1`), `cli/memory_cmd.py`, orchestrator prefix patch (~25 LOC adds SOUL + recall(query, k=4) to every turn), tests. `/memory/*` FastAPI routes DROPPED from floor per D3.
+- **S3** — Studio Bloomberg dashboard: floor panes first (theme.py / splash.py / widgets/{files, live_chat, activity, status_bar, traces}.py + app.py Grid layout + textual-serve `--serve` flag); bonus panes if time (widgets/{eval_panel, kg_snapshot, graph}.py) with explicit cut order per D6.
+- **S4** — Docker delta (drop Node from base image; add `textual-serve`; conditional BGE-M3 bake; `tini` PID-1 + bash `wait -n` running uvicorn :8000 + textual-serve :8001) + archive `experimental/{pi-extension, ts-shell}` → `docs/explorations/ts-archive/` + write `EXPLORATIONS.md`.
+- **S5** — `pyproject.toml` extras (`lite / server / local / full`, LangFlow pattern) + `EmbedBackend` ABC polish + XDG paths (`${XDG_DATA_HOME:-~/.local/share}/klerk/{sessions, memory, lancedb}`).
+
+Merge order into planning branch: **S5 → S1 → S2 → S3 (floor) → S3 (bonus if shipped) → S4**. S0 coordinator resolves conflicts.
+
+### 13.6 Phase B — Tomorrow morning (~4-5h wall)
+
+- **B.1** — S0 integration smoke (~2h): merge S1-S5 branches; `pytest` all green; `docker compose up` smoke at `localhost:8001`; `pipx install -e .[lite]` lite smoke with `KLERK_EMBED_BACKEND=remote`.
+- **B.2** — S6 (~1.5h parallel): `klerk eval run --rubric` against 20 Qs; fill EVAL.md with actual numbers + honest failure analysis.
+- **B.3** — S7 (~1.5h parallel): README rewrite (dual-surface narrative + install matrix + brief-compliance table with A/B/C ★ + beyond-brief split per D5) + HANDOFF v7 capture + DATA_GENERATION.md sweep + `docs/architecture.md` v7 diagram.
+- **B.4** — S0 submit (~30min): final smoke; planning branch push (main is already at floor since `740cddd`); verify Drive shared with `ydharmaw@fata-organa.com` Editor; compose submission email.
+
+### 13.7 Explicitly out of scope for v7
+
+- **Phase C (TS+Bun rewrite — Flue / Mastra)** — omitted entirely. The architecture stays Phase-C-friendly (Midday CLI-as-contract lets a future TS agent layer wrap the existing Python substrate via `Bun.spawn`) but no Phase C work happens for the May 31 submission.
+- `experimental/pi-extension/` + `experimental/ts-shell/` — archived to `docs/explorations/ts-archive/`. Pi as 2nd surface replaced by textual-serve.
+- `/internal/*` HTTP shim — dropped per D2.
+- `/memory/*` HTTP routes — bonus only per D3.
+- Streamlit stub at `frontend/streamlit_app.py` — already a no-op stub; v7 leaves it as-is. The Bloomberg-style Studio dashboard is the wanted polish, not Streamlit.
+
+### 13.8 Resume commands for next session
+
+```bash
+git checkout claude/agent-framework-planning-jJqQj
+git pull --ff-only origin claude/agent-framework-planning-jJqQj
+# Confirm at 740cddd (RQYyt merge commit)
+git log -1 --oneline
+# Sync deps
+uv sync
+# v6 + stack-d archived; v7 is active
+ls .planning/
+# .planning/archive/{v6-plan,stack-d-migration}.md  → trace
+# .planning/v7-plan.md                              → active
+# Read .planning/v7-plan.md and pick a Phase A session (S1-S5) to own.
+```
+
+### 13.9 Where prior plans live
+
+- **v6 plan** (Stack C / Pi 2nd surface / 8-cluster spine; clusters 1-4 shipped) → `.planning/archive/v6-plan.md`
+- **Stack-D migration** (Pi tools shell out to CLI verbs, Bloomberg dashboard, textual-serve pivot) → `.planning/archive/stack-d-migration.md`
+- **v7 plan** (D1-D6 + Hermes trio + dual-surface + omit Phase C) → `.planning/v7-plan.md`
+
+Both archived plans kept for decision-history trace; v7 supersedes per the D1-D6 deltas.
+
+---
+
+*End of handoff. If you're a new session starting here: read sections 1-3 first, then **§13 (v7 active workplan)** + `.planning/v7-plan.md` for the full work breakdown. Sections 4-6 are deep context. Sections 7-11 are v5 reference. Section 12 captures v6 — mostly shipped via the RQYyt merge `740cddd`, superseded by §13 but kept for trace.*
