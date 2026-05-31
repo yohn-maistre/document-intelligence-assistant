@@ -1,4 +1,4 @@
-.PHONY: help setup demo eval mcp studio studio-web phoenix api compose compose-down clean
+.PHONY: help setup demo demo-lite eval mcp studio studio-web phoenix api compose compose-down clean
 
 help:
 	@echo "klerk — Document Intelligence Assistant"
@@ -6,6 +6,7 @@ help:
 	@echo "  setup          install Python deps (uv sync)"
 	@echo "  smoke          h0 smoke-test: LiteLLM → Nemotron + Phoenix launch"
 	@echo "  demo           end-to-end on data/seed: index → kg → ask → propose → contradict → faq → anomaly"
+	@echo "  demo-lite      lite path: remote embed (no BGE-M3 bake, no Docker) — index + ask on data/seed"
 	@echo "  eval           RAGAS + klerk 5-axis rubric"
 	@echo "  kg             rebuild KG + render kg.html"
 	@echo "  contradict     pairwise contradiction sweep over the KG"
@@ -51,6 +52,16 @@ demo:
 	@echo "    data/output/proposals/   — proposal markdown"
 	@echo "    data/output/contradictions.md  data/output/faq.md  data/output/anomalies.md"
 	@echo "    Then: make studio"
+
+# Lite path — no local BGE-M3 weights, no Docker. Uses a remote OpenAI-compat
+# embed endpoint (KLERK_EMBED_REMOTE_URL, owned by the [server]/[lite] extras).
+# This is the constrained-device / fast-demo surface; RAM stays well under 1GB.
+# Run with `uv run` (dev) or `pipx run klerk` once published.
+demo-lite:
+	@echo "── lite demo (KLERK_EMBED_BACKEND=remote — no BGE-M3 bake, no Docker) ──"
+	KLERK_EMBED_BACKEND=remote uv run klerk index build --src data/seed --rebuild
+	KLERK_EMBED_BACKEND=remote uv run klerk ask "Berapa tarif konsultan advisory PT Pelangi per jam?" --locale id
+	@echo "✓ lite demo complete. Then: KLERK_EMBED_BACKEND=remote make studio"
 
 eval:
 	uv run python -m klerk.cli.main eval run --ragas --rubric

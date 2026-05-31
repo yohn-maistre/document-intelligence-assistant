@@ -2,13 +2,23 @@
 #
 # klerk — Document Intelligence Assistant
 #
-# Two-stage build:
-#   1. builder: uv-driven install into a venv at /app/.venv
+# Python-only, two-stage build (v7 — no Node/TS in the image; the dual surface
+# is Textual served via textual-serve, one Python substrate):
+#   1. builder: uv-driven install of the `full` extra into a venv at /app/.venv
 #   2. runtime: slim image with the venv copied in + BGE-M3 weights pre-baked
+#
+# The `full` extra (owned by pyproject's [project.optional-dependencies])
+# pulls FastAPI + uvicorn + textual-serve + the local BGE-M3 embed stack, so
+# the one image serves BOTH surfaces: FastAPI on :8000 and the Studio TUI over
+# the browser via textual-serve on :8001.
 #
 # Pre-baking BGE-M3 (~1.2GB) means cold start of the container doesn't pull
 # the model on first request. The Hugging Face cache lands at /app/.hf-cache
-# inside the image so the runtime layer is self-contained.
+# inside the image so the runtime layer is self-contained. The bake is gated
+# by ARG KLERK_EMBED_BACKEND (default `local`) — the graded compose path keeps
+# it `local` so self-hosting BGE-M3 is unambiguous; build with
+# `--build-arg KLERK_EMBED_BACKEND=remote` to skip the bake for a slim image
+# that points at a remote OpenAI-compatible embed endpoint at runtime.
 
 # ─── Stage 1: builder ────────────────────────────────────────────────────────
 FROM python:3.11-slim AS builder
@@ -33,20 +43,24 @@ RUN apt-get update \
 WORKDIR /app
 
 # Resolve + install deps from the lockfile WITHOUT the project source first,
-# so this layer cache-busts only when pyproject / uv.lock change.
+# so this layer cache-busts only when pyproject / uv.lock change. The `full`
+# extra includes the server (uvicorn + textual-serve) + local embed stack.
 COPY pyproject.toml uv.lock ./
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-install-project --no-dev
+    uv sync --frozen --no-install-project --no-dev --extra full
 
 # Now install the project itself.
 COPY src/ ./src/
 COPY README.md ./
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev
+    uv sync --frozen --no-dev --extra full
 
 
 # ─── Stage 2: runtime ────────────────────────────────────────────────────────
 FROM python:3.11-slim AS runtime
+
+# Conditionally bake BGE-M3 weights. `local` (default) bakes; `remote` skips.
+ARG KLERK_EMBED_BACKEND=local
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -54,10 +68,13 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     TRANSFORMERS_OFFLINE=0 \
     PATH="/app/.venv/bin:$PATH" \
     KLERK_API_HOST=0.0.0.0 \
-    KLERK_API_PORT=8000
+    KLERK_API_PORT=8000 \
+    KLERK_STUDIO_PORT=8001 \
+    KLERK_EMBED_BACKEND=${KLERK_EMBED_BACKEND}
 
 # Minimal runtime libs. lancedb needs libgomp; docling needs libgl/libglib
-# for its layout parser; ca-certs for HTTPS to the Nemotron proxy.
+# for its layout parser; ca-certs for HTTPS to the Nemotron proxy; tini is
+# PID-1 so signals + zombie reaping work for the two concurrent processes.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         libgomp1 \
@@ -65,6 +82,7 @@ RUN apt-get update \
         libglib2.0-0 \
         ca-certificates \
         curl \
+        tini \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -74,10 +92,17 @@ COPY --from=builder /app/.venv /app/.venv
 COPY --from=builder /app/src /app/src
 COPY pyproject.toml uv.lock README.md ./
 COPY Makefile ./
+COPY docker/entrypoint.sh /usr/local/bin/klerk-entrypoint
+RUN chmod +x /usr/local/bin/klerk-entrypoint
 
 # Pre-bake BGE-M3 weights so first request doesn't pull ~1.2GB from HF.
-# Failure here is fatal — we want the image to be self-contained.
-RUN python -c "from FlagEmbedding import BGEM3FlagModel; BGEM3FlagModel('BAAI/bge-m3', devices=['cpu'], use_fp16=False)"
+# Gated on KLERK_EMBED_BACKEND=local; `remote` builds skip the bake entirely.
+# Failure in the local path is fatal — we want the image self-contained.
+RUN if [ "$KLERK_EMBED_BACKEND" = "local" ]; then \
+        python -c "from FlagEmbedding import BGEM3FlagModel; BGEM3FlagModel('BAAI/bge-m3', devices=['cpu'], use_fp16=False)"; \
+    else \
+        echo "KLERK_EMBED_BACKEND=$KLERK_EMBED_BACKEND — skipping BGE-M3 bake (remote embed at runtime)"; \
+    fi
 
 # State directories — these are bind-mountable from the host but exist with
 # sane defaults so the container runs without any volume config.
@@ -88,9 +113,12 @@ RUN groupadd -r klerk && useradd -r -g klerk -d /app klerk \
     && chown -R klerk:klerk /app
 USER klerk
 
-EXPOSE 8000 6006
+# 8000 FastAPI · 8001 Studio over textual-serve · 6006 Phoenix UI
+EXPOSE 8000 8001 6006
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
     CMD curl -fsS http://localhost:8000/health || exit 1
 
-CMD ["uvicorn", "klerk.api.server:app", "--host", "0.0.0.0", "--port", "8000"]
+# tini reaps zombies + forwards signals to the two concurrent processes.
+ENTRYPOINT ["/usr/bin/tini", "--"]
+CMD ["klerk-entrypoint"]
