@@ -231,6 +231,17 @@ def chat(
 app.command("ask", help="Q&A over the corpus (CRAG-lite + citations).")(ask_cmd)
 app.command("write", help="Adversarial doc-writer (Drafter-A vs Drafter-B + Adjudicator + Critic).")(write_cmd)
 
+# ─── Brief-option verbs (S1 / Phase A.1) ─────────────────────────────────────
+# extract-actions = Brief Option B; escalate draft = Brief Option A.
+from klerk.cli.extract_actions_cmd import extract_actions_cmd  # noqa: E402
+from klerk.cli.escalate_cmd import escalate_draft_cmd  # noqa: E402
+
+app.command("extract-actions", help="Brief Option B — extract action items from a doc or text.")(extract_actions_cmd)
+
+escalate_app = typer.Typer(name="escalate", help="Brief Option A — escalation drafter.", no_args_is_help=True)
+app.add_typer(escalate_app)
+escalate_app.command("draft", help="Draft an escalation email for a low-confidence question.")(escalate_draft_cmd)
+
 
 def main() -> None:
     """Entry point exposed via [project.scripts] klerk = ..."""

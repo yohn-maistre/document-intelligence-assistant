@@ -10,13 +10,15 @@ from __future__ import annotations
 from typing import Annotated
 
 import typer
-from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-console = Console()
+from klerk.cli._agent_flag import agent_console, emit, with_agent_mode
+
+console = agent_console()
 
 
+@with_agent_mode
 def sync_cmd(
     folder_id: Annotated[
         str | None,
@@ -59,7 +61,21 @@ def sync_cmd(
             )
         )
 
+    emit(
+        {
+            "mode": mode,
+            "folder_id": report.folder_id,
+            "added": len(report.diff.added),
+            "changed": len(report.diff.changed),
+            "removed": len(report.diff.removed),
+            "downloaded": len(report.downloaded),
+            "download_dir": report.download_dir,
+            "page_token": report.page_token,
+        }
+    )
 
+
+@with_agent_mode
 def upload_cmd(
     src: Annotated[
         str,
@@ -113,6 +129,16 @@ def upload_cmd(
     table.add_column("file_id", style="dim")
     if not report.results:
         console.print(f"[yellow]No files matched src={src} glob={glob}[/yellow]")
+        emit(
+            {
+                "mode": mode,
+                "folder_id": report.folder_id,
+                "dry_run": dry_run,
+                "uploaded": 0,
+                "skipped": 0,
+                "results": [],
+            }
+        )
         return
     for r in report.results:
         table.add_row(r.status, r.name, r.file_id or "—")
@@ -133,7 +159,22 @@ def upload_cmd(
     else:
         console.print(f"[green]Uploaded {n_up}[/green] · skipped {n_skip}")
 
+    emit(
+        {
+            "mode": mode,
+            "folder_id": report.folder_id,
+            "dry_run": dry_run,
+            "uploaded": n_up,
+            "skipped": n_skip,
+            "results": [
+                {"status": r.status, "name": r.name, "file_id": r.file_id}
+                for r in report.results
+            ],
+        }
+    )
 
+
+@with_agent_mode
 def status_cmd() -> None:
     """Show the persisted manifest and page-token snapshot."""
     from klerk.drive.sync import load_manifest, load_page_token, manifest_path, page_token_path
@@ -149,3 +190,12 @@ def status_cmd() -> None:
     table.add_row("page_token", str(page_token_path()))
     table.add_row("page_token_value", token[:16] + "…" if token else "[yellow]not seeded[/yellow]")
     console.print(table)
+
+    emit(
+        {
+            "manifest": str(manifest_path()),
+            "manifest_files": len(manifest),
+            "page_token_path": str(page_token_path()),
+            "page_token_seeded": bool(token),
+        }
+    )

@@ -6,16 +6,17 @@ from pathlib import Path
 from typing import Annotated
 
 import typer
-from rich.console import Console
 from rich.panel import Panel
 from rich.rule import Rule
 from rich.table import Table
 
 from klerk.agent.doc_writer import propose, save_proposal
+from klerk.cli._agent_flag import agent_console, emit, with_agent_mode
 
-console = Console()
+console = agent_console()
 
 
+@with_agent_mode
 def write_cmd(
     topic: Annotated[str, typer.Argument(help="Document topic.")],
     sections: Annotated[int, typer.Option("--sections", "-n", help="Number of sections.")] = 3,
@@ -79,3 +80,23 @@ def write_cmd(
 
     path = save_proposal(proposal, out_dir=out_dir)
     console.print(f"\n[green]✓[/green] Document written: [cyan]{path}[/cyan]")
+
+    emit(
+        {
+            "topic": topic,
+            "locale": locale,
+            "sections": sections,
+            "path": str(path),
+            "rounds": [
+                {
+                    "title": r.section.title,
+                    "winner": r.adjudication.winner,
+                    "rubric_mean": r.rubric.mean,
+                }
+                for r in proposal.rounds
+            ],
+            "summary_rubric_mean": (
+                proposal.summary_rubric.mean if proposal.summary_rubric else None
+            ),
+        }
+    )

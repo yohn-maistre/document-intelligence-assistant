@@ -5,15 +5,16 @@ from __future__ import annotations
 from typing import Annotated
 
 import typer
-from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
 from klerk.agent.crag import ask as crag_ask
+from klerk.cli._agent_flag import agent_console, emit, with_agent_mode
 
-console = Console()
+console = agent_console()
 
 
+@with_agent_mode
 def ask_cmd(
     question: Annotated[str, typer.Argument(help="Question to answer over the corpus.")],
     locale: Annotated[str, typer.Option("--locale", "-l", help="en | id")] = "en",
@@ -74,3 +75,14 @@ def ask_cmd(
         console.print(cite_table)
     else:
         console.print("[yellow]No citations parsed from the answer.[/yellow]")
+
+    emit(
+        {
+            "question": question,
+            "answer": trace_obj.answer.answer,
+            "confidence": trace_obj.answer.confidence,
+            "locale": trace_obj.answer.locale,
+            "citations": list(trace_obj.answer.citations),
+            "sub_questions": list(trace_obj.sub_questions),
+        }
+    )

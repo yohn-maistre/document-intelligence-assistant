@@ -13,16 +13,16 @@ from pathlib import Path
 from typing import Annotated
 
 import typer
-from rich.console import Console
 from rich.panel import Panel
 from rich.rule import Rule
 from rich.table import Table
 
+from klerk.cli._agent_flag import agent_console, emit, with_agent_mode
 from klerk.eval import ragas_runner, rubric
 from klerk.eval.golden import load as load_golden
 from klerk.llm.cache import cache_stats
 
-console = Console()
+console = agent_console()
 
 
 def _write_json(path: Path, data) -> Path:
@@ -49,6 +49,7 @@ def _render_axis_table(name: str, summary: dict) -> Table:
     return t
 
 
+@with_agent_mode
 def run_cmd(
     locale: Annotated[str | None, typer.Option("--locale", "-l", help="Restrict to one locale (en | id).")] = None,
     do_ragas: Annotated[bool, typer.Option("--ragas/--no-ragas", help="Run RAGAS baseline.")] = True,
@@ -68,6 +69,8 @@ def run_cmd(
         border_style="cyan",
     ))
 
+    payload: dict = {"n_items": len(items), "locale": locale or "all"}
+
     # ── Custom 5-axis rubric ──────────────────────────────────────────────
     if do_rubric:
         console.print(Rule("[bold]klerk 5-axis rubric[/bold]", style="green"))
@@ -82,6 +85,7 @@ def run_cmd(
             "aggregate": agg,
         })
         console.print(f"[dim]→ {path}[/dim]\n")
+        payload["rubric"] = {"aggregate": agg, "report": str(path)}
 
     # ── RAGAS baseline ────────────────────────────────────────────────────
     if do_ragas:
@@ -106,6 +110,12 @@ def run_cmd(
             "aggregate": report.aggregate,
         })
         console.print(f"[dim]→ {path}[/dim]\n")
+        payload["ragas"] = {
+            "available": report.available,
+            "reason": report.reason,
+            "aggregate": report.aggregate,
+            "report": str(path),
+        }
 
     # ── Cache footer ──────────────────────────────────────────────────────
     cs = cache_stats()
@@ -115,3 +125,4 @@ def run_cmd(
         title="cache state after eval",
         border_style="dim",
     ))
+    emit(payload)
