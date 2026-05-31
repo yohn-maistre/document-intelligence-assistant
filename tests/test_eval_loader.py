@@ -8,7 +8,9 @@ from klerk.synth.specs import CORPUS
 
 def test_brief_set_has_20_items():
     items = load_brief_set()
-    assert len(items) == 20
+    # 22 total = the brief-mandated 20 + 2 beyond-brief Japanese items
+    assert len(items) == 22
+    assert len([i for i in items if i.category != "japanese"]) == 20
 
 
 def test_distribution_matches_brief():
@@ -19,14 +21,15 @@ def test_distribution_matches_brief():
     assert len(grouped["conflict"]) == 3
     assert len(grouped["bahasa"]) == 2
     assert len(grouped["trick"]) == 2
+    assert len(grouped["japanese"]) == 2  # beyond brief
 
 
 def test_item_fields_populated():
     for item in load_brief_set():
         assert item.id
         assert item.question
-        assert item.locale in ("en", "id")
-        assert item.category in ("factual", "multi_hop", "conflict", "bahasa", "trick")
+        assert item.locale in ("en", "id", "ja")
+        assert item.category in ("factual", "multi_hop", "conflict", "bahasa", "trick", "japanese")
         assert isinstance(item.expected_doc_ids, list)
         assert isinstance(item.expected_substrings, list)
         assert isinstance(item.should_say_dont_know, bool)

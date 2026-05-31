@@ -242,6 +242,7 @@ Where it's headed:
 | [docs/architecture.md](docs/architecture.md) | Full architecture + data flow |
 | [docs/design-decisions.md](docs/design-decisions.md) | Every framework picked + every runner-up rejected, with reasoning |
 | [DATA_GENERATION.md](DATA_GENERATION.md) | How the sample corpus is generated + QC |
+| [docs/CORPUS.md](docs/CORPUS.md) | Per-document reference (incl. JA translations) |
 | [EVAL.md](EVAL.md) | Evaluation methodology, rubric, and results |
 | [docs/ASSIGNMENT.md](docs/ASSIGNMENT.md) | Take-home brief mapping + compliance |
 

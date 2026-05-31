@@ -1,14 +1,16 @@
 {
   "schema_version": "1.0",
   "corpus": "Fata Organa Solusi (synthetic) — see src/klerk/synth/specs.py",
-  "n_items": 20,
+  "n_items": 22,
   "distribution": {
     "factual": 8,
     "multi_hop": 5,
     "conflict": 3,
     "bahasa": 2,
-    "trick": 2
+    "trick": 2,
+    "japanese": 2
   },
+  "note": "Q01-Q20 are the brief-mandated 20 (8 factual / 5 multi-hop / 3 conflict / 2 Bahasa / 2 trick). Q21-Q22 are beyond-brief Japanese-locale items that exercise the Tokyo-office corpus.",
   "items": [
     {
       "id": "Q01",
@@ -424,6 +426,47 @@
       ],
       "expected_doc_ids": [],
       "should_say_dont_know": true
+    },
+    {
+      "id": "Q21",
+      "question": "東京オフィスの通勤手当で、片道40km以上55km未満の場合の月額支給上限はいくらですか？",
+      "question_language": "ja",
+      "category": "japanese",
+      "expected_answer": "月額62,000円が支給上限です。",
+      "source_documents": [
+        "hr_jp_tsukin_teate"
+      ],
+      "notes": "BEYOND BRIEF (Japanese). Gloss: 'Tokyo office commuting allowance — monthly cap for a one-way distance of 40-55 km?' Reads a value out of the Japanese commuting-allowance table.",
+      "locale": "ja",
+      "expected_substrings": [
+        "62,000"
+      ],
+      "expected_doc_ids": [
+        "hr_jp_tsukin_teate"
+      ],
+      "should_say_dont_know": false
+    },
+    {
+      "id": "Q22",
+      "question": "CACホールディングスのデータ基盤刷新プロジェクトの進捗率と、データ移行フェーズの遅延期間を教えてください。",
+      "question_language": "ja",
+      "category": "japanese",
+      "expected_answer": "プロジェクト全体の約34%が完了しており、データ移行フェーズは2週間遅延しています。",
+      "source_documents": [
+        "minutes_cac_jp_steering",
+        "minutes_jp_tokyo_allhands"
+      ],
+      "notes": "BEYOND BRIEF (Japanese, multi-hop). Gloss: 'For the CAC Holding data-platform project, what is the progress percentage and how long is the data-migration delay?' The 34% / 2-week facts appear in both the steering minutes and the all-hands minutes.",
+      "locale": "ja",
+      "expected_substrings": [
+        "34",
+        "2週間"
+      ],
+      "expected_doc_ids": [
+        "minutes_cac_jp_steering",
+        "minutes_jp_tokyo_allhands"
+      ],
+      "should_say_dont_know": false
     }
   ],
   "schema_note": "Superset of the brief's evaluation_set schema (id, question, question_language, category, expected_answer, source_documents, notes) plus klerk grading extras (locale, expected_substrings, expected_doc_ids, should_say_dont_know)."
