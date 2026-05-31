@@ -138,6 +138,11 @@ def _parse_body(text: str, spec: DocSpec) -> DocBody:
         # Strip the first line (```json or ```) and the trailing fence.
         cleaned = cleaned.split("\n", 1)[1] if "\n" in cleaned else cleaned
         cleaned = cleaned.rsplit("```", 1)[0].strip()
+    # The model may wrap the JSON in reasoning/prose; extract the object span.
+    if not cleaned.startswith("{"):
+        i, j = cleaned.find("{"), cleaned.rfind("}")
+        if i != -1 and j > i:
+            cleaned = cleaned[i : j + 1]
     try:
         data = json.loads(cleaned)
     except json.JSONDecodeError as e:

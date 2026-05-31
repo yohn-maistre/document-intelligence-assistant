@@ -113,6 +113,12 @@ def complete(
     if max_tokens is not None:
         kwargs["max_tokens"] = max_tokens
     if response_format is not None:
+        # The Nemotron proxy only accepts response_format.type of 'json_schema'
+        # or 'text' — NOT OpenAI's 'json_object'. We parse JSON from the text
+        # reply ourselves (lenient extraction in the callers), so downgrade
+        # json_object → text; the JSON contract lives in the prompt.
+        if response_format.get("type") == "json_object":
+            response_format = {"type": "text"}
         kwargs["response_format"] = response_format
     if tools is not None:
         kwargs["tools"] = tools

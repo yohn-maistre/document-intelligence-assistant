@@ -17,6 +17,23 @@ from klerk.llm.router import complete
 T = TypeVar("T", bound=BaseModel)
 
 
+def _extract_json(text: str) -> str:
+    """Pull a JSON object/array out of a model reply that may be fenced or
+    wrapped in reasoning/prose (the Nemotron proxy returns plain text)."""
+    s = (text or "").strip()
+    if s.startswith("```"):
+        s = s.split("\n", 1)[1] if "\n" in s else s
+        s = s.rsplit("```", 1)[0].strip()
+    if not (s.startswith("{") or s.startswith("[")):
+        starts = [p for p in (s.find("{"), s.find("[")) if p != -1]
+        if starts:
+            i = min(starts)
+            j = max(s.rfind("}"), s.rfind("]"))
+            if j > i:
+                s = s[i : j + 1]
+    return s or "{}"
+
+
 def ask_json(
     schema: type[T],
     *,
@@ -43,7 +60,7 @@ def ask_json(
                 response_format={"type": "json_object"},
             )
             content = response.choices[0].message.content or "{}"
-            data = json.loads(content)
+            data = json.loads(_extract_json(content))
             return schema.model_validate(data)
         except (json.JSONDecodeError, ValidationError) as e:
             last_err = e
