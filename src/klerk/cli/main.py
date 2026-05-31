@@ -104,20 +104,25 @@ kg_app.command("viz", help="Render the KG to interactive HTML (pyvis).")(kg_viz_
 
 
 # ── studio ──────────────────────────────────────────────────────────────────
-@app.command("studio", help="Launch the Textual operator TUI (5 panels).")
+@app.command("studio", help="Launch the Bloomberg-style Textual cockpit (floor: files/chat/activity/status/traces).")
 def studio_cmd(
-    serve: Annotated[bool, typer.Option("--serve", help="STRETCH: browser via textual-web.")] = False,
+    serve: Annotated[bool, typer.Option("--serve", help="Serve the studio in-browser via textual-serve (:8001).")] = False,
+    lite: Annotated[bool, typer.Option("--lite", help="Chat-only layout for narrow (<120 col) terminals.")] = False,
+    mode: Annotated[str, typer.Option("--mode", help="Engine mode: 'lite' (in-process orchestrator) or 'full' (SSE to /chat).")] = "lite",
+    base_url: Annotated[str, typer.Option("--base-url", help="FastAPI base URL used by 'full' mode.")] = "http://localhost:8000",
+    locale: Annotated[str, typer.Option("--locale", "-l", help="en | id")] = "en",
 ) -> None:
-    """Open klerk studio — corpus / eval / traces / proposals / KG."""
-    from klerk.studio.app import KlerkStudio
+    """Open klerk studio — files / live-chat / activity / status / traces."""
+    from klerk.studio import app as studio_app
 
     if serve:
-        console.print(
-            "[yellow]--serve needs textual-web in a separate venv "
-            "(textual-web pins old textual <0.44). See docs/design-decisions.md.[/yellow]"
-        )
-        raise typer.Exit(code=0)
-    KlerkStudio().run()
+        try:
+            studio_app.serve(mode="full", base_url=base_url)
+        except RuntimeError as e:
+            console.print(f"[yellow]{e}[/yellow]")
+            raise typer.Exit(code=1) from e
+        return
+    studio_app.run(mode=mode, base_url=base_url, locale=locale, lite=lite)
 
 
 # ─── Top-level utility verbs ─────────────────────────────────────────────────
