@@ -25,8 +25,8 @@ The May 2026 *Dynamic Workflows* paradigm (Claude Code, Opus 4.8) reinforces thi
 | Orchestration | Hand-rolled ReAct + CRAG-lite loop in Python (~200 LOC) | Anthropic stance. Loop ownership = system ownership. |
 | LLM gateway | LiteLLM SDK (in-process, not proxy) | One library = fallbacks + cost tracking + cache hooks, no extra process. |
 | Vector + BM25 | LanceDB native hybrid (Tantivy FTS) | Embedded, no Docker, March 2026 hybrid one-call API. |
-| Embeddings | BGE-M3 (self-hosted, sentence-transformers) | Multilingual; Bahasa-strong; no API-key dependency for the reviewer's first run. |
-| Reranker | BGE-Reranker-v2-m3 (cross-encoder, self-hosted) | 50-100ms CPU latency; clear quality lift over RRF-alone. |
+| Embeddings | BGE-M3 (self-hosted via FlagEmbedding) | Multilingual; Bahasa-strong; no API-key dependency for the reviewer's first run. |
+| Reranker | BGE-M3 ColBERT head (since v5; was BGE-Reranker-v2-m3) | Late-interaction MaxSim — one model does embed + rerank, see v5-1. |
 | Knowledge graph | NetworkX (in-memory + JSON persist) | Kùzu archived; Memgraph license-locked; Neo4j too heavy. |
 | KG extraction | Pydantic AI structured outputs → NetworkX | $10-50 cost on 25 docs vs $100+ for Microsoft GraphRAG. |
 | LLM cache (exact) | DiskCache (SQLite-backed) | Prod-grade, Apache-2.0, ~1 KB/entry, no server. |
@@ -224,3 +224,131 @@ v4 plan and have changed:
 The other rows (LanceDB hybrid, BGE-M3 dense, NetworkX KG, Docling
 parser, DiskCache exact cache, Phoenix observability, MCP gateway,
 custom rubric) carry through unchanged from v4 to v5.
+
+---
+
+## v7 supplement — productization decisions
+
+v7 reframes klerk from a take-home into a product shape: one Python substrate,
+two polished surfaces, long-term memory, and an install matrix that scales from a
+phone to a full Docker stack. Each decision below names the alternatives and why
+they lost. (Appended, not rewritten — the v4/v5 evolution above stays readable.)
+
+### v7-1. One substrate, two surfaces — vs Pi / Flue / a TS-Bun rewrite
+
+**Decision:** terminal TUI **and** browser TUI from a single Python codebase
+(Textual + `textual-serve`). No Node, no second language.
+
+| Alternative | Why rejected |
+|---|---|
+| **Pi** (Node TUI runtime, the v6 detour) | Vertical-stack TUI only — no horizontal multi-pane layout for a dashboard; drags a Node runtime into the image. Archived to `docs/explorations/`. |
+| **Flue** (`@flue/sdk`, TS agent framework) | A 4–6 week rewrite that kills the Python substrate (PydanticAI, LangGraph, LanceDB hybrid with Tantivy BM25, ColBERT, Docling). |
+| **Full TS + Bun rewrite** | `@lancedb/lancedb` on Bun is REST-only; no BM25/FTS in JS; no ColBERT in TS. Ecosystem gaps are non-negotiable. |
+
+`textual-serve` runs the **same** Textual app server-side and streams it to
+xterm.js — terminal and browser share one engine with zero HTTP shim. The
+architecture stays "Phase-C-friendly" (the CLI-as-contract below lets a future TS
+layer wrap the Python core via `Bun.spawn`) without paying for it now.
+
+### v7-2. In-process tools; the CLI is the *external* contract — vs subprocess shell-out
+
+**Decision:** the chat orchestrator calls its tools as **in-process Python
+functions** (`src/klerk/agent/tools.py`). The Midday-style `--agent/--json` CLI is
+the contract for **external** callers (Claude Code, cron, other agents) — *not*
+how the agent calls itself.
+
+**Why:** a subprocess-per-tool-call pays Python startup + import cost on every
+invocation (and a torch reload if the local embedder is on the path) — fatal on
+the lite target and wasteful everywhere. One engine, one model load per
+deployment. CLI verbs and orchestrator tools call the **same** underlying core
+functions, so there's no second code path to drift.
+
+### v7-3. Long-term memory: a file trio + one table — vs Honcho / Mem0 / Letta
+
+**Decision:** `SOUL.md` (identity) + `MEMORY.md` (append-only fact log) + a single
+LanceDB `memory_v1` table for recall (~180 LOC). Prefixed onto every chat turn.
+
+| Alternative | Why rejected |
+|---|---|
+| **Honcho** | AGPL + Postgres + Redis + a Deriver worker — far too heavy. |
+| **Mem0** | Lighter, but adds a second vector store + a second eval surface. |
+| **Letta** | An extra service and a markedly different agent model. |
+
+We already run LanceDB; memory reuses it. The file convention is human-readable,
+git-friendly, and trivially inspectable (`klerk memory show-soul`).
+
+### v7-4. Pluggable embeddings — local **BGE-M3** (HuggingFace) vs remote, and why not an LLM-vendor embed
+
+**Decision:** one `EmbedBackend` ABC with three implementations, chosen by
+`KLERK_EMBED_BACKEND`:
+- **`local`** — `BAAI/bge-m3`, downloaded from **HuggingFace Hub** via
+  `FlagEmbedding.BGEM3FlagModel`. One model serves **both** dense embedding *and*
+  ColBERT-head reranking (three heads: dense + sparse + ColBERT). Multilingual
+  (incl. Bahasa Indonesia), 1024-d, CPU-friendly. This is the Docker/full path.
+- **`remote`** — any OpenAI-compatible `/embeddings` endpoint, for constrained
+  devices (the lite path) where downloading a model isn't viable.
+- **`mock`** — deterministic vectors for tests (no network, no weights).
+
+| Alternative | Why rejected |
+|---|---|
+| **Cohere Embed v4 / OpenAI text-embedding-3** | Best MTEB, but require a paid API key and send data out — wrong for a self-hosted, no-egress brief. |
+| **A separate cross-encoder reranker** (BGE-Reranker-v2-m3) | BGE-M3's ColBERT head reranks in-model — one weights file does embed + rerank, ~1GB lighter. |
+| **Vision-language embedders** (ColPali / ColQwen / Jina-v4 / omni-embed-nemotron) | Bahasa/JP unbenchmarked, tables degrade to page blobs, CPU multi-vector 5–10× slower, and the Nemotron one is non-commercial-licensed (see v5-2). |
+
+**`BAAI/bge-m3` at a glance** (verified against the HF model card + the BGE-M3
+paper, arXiv 2402.03216):
+
+| | |
+|---|---|
+| Source | HuggingFace Hub (`huggingface.co/BAAI/bge-m3`), pulled by FlagEmbedding |
+| Architecture | ~568M params, fine-tuned XLM-RoBERTa |
+| Dimensions | 1024 (dense) · sparse lexical · ColBERT multi-vector |
+| Max sequence | 8192 tokens |
+| Languages | 100+ (trained on 105), Indonesian/Bahasa explicitly covered |
+| License | MIT |
+| Download | ~1.06GB (fp16) / ~2.2–2.5GB (fp32 default); `remote`/`mock` download nothing |
+
+The **LLM itself is never downloaded** — generation always routes out to the
+configured gateway. Only the *embedding* model is local (and only in `local`/full
+mode).
+
+### v7-5. Install profiles — a torch-free lite base
+
+**Decision:** the base `dependencies` are the **lite runtime** (no torch, no
+FlagEmbedding, no Docling), so `pip install klerk` runs on a phone under proot.
+Heavy pieces are opt-in extras:
+
+| Profile | Adds | For |
+|---|---|---|
+| `lite` (base) | — | constrained devices; remote/mock embed; ~hundreds of MB |
+| `server` | FastAPI + uvicorn + textual-serve | the API + browser dashboard |
+| `local` | FlagEmbedding + torch + transformers | local BGE-M3 embed/rerank |
+| `parse` | Docling | layout-aware parsing (pulls torch via docling-ibm-models) |
+| `full` | server + local + parse | the `docker compose` target |
+
+All heavy imports are **lazy + gated** with fallbacks (remote embed, RRF-only
+rerank, PyMuPDF parse), so the slim base imports and runs without any of them.
+
+### v7-6. Drive auth — Service Account vs OAuth
+
+**Decision:** **Service Account** (non-interactive). A reviewer running
+`docker compose up` never walks an OAuth consent screen; they share a Drive folder
+with the SA's email and set `DRIVE_FOLDER_ID`. Self-serve OAuth (so end users link
+their own Drive) is on the roadmap, not the MVP.
+
+### v7-7. One model, no fallbacks
+
+**Decision:** every generation call routes to **`nemotron-3-nano-omni`** through
+LiteLLM + Cloudflare Access. No OpenAI/Anthropic/Cohere fallback — the brief
+forbids swapping the model, and the gateway is the contract.
+
+### v7-8. Supersedes — stale v4 rows now corrected
+
+- **Chat harness** (`klerk-cli` TS + Pi runtime, v4 stack table) → replaced by the
+  Textual + textual-serve dual surface (v7-1); the Pi/TS experiments are archived
+  under `docs/explorations/`.
+- **LLM semantic cache** (LanceDB `llm_cache`, v4) → dropped; DiskCache
+  exact-match is sufficient for this scale.
+- **Reranker** (separate BGE-Reranker-v2-m3, v4) → BGE-M3 ColBERT head (since v5).
+- **Background ingestion / drift** → the `scheduled` extra (APScheduler), kept out
+  of the lite base.

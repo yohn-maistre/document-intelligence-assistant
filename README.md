@@ -53,10 +53,16 @@ into cron jobs, scripts, and other agents as cleanly as it serves humans.
 
 ## Quick start
 
-### Docker — full stack (recommended)
+### Full — `docker compose up`
+
+Brings up the whole system from a clean checkout: the FastAPI service, the Studio
+dashboard in the browser, and observability. On first build it **downloads the
+embedding model (BGE-M3) locally** so retrieval runs on-box; the **LLM stays
+remote** via your configured gateway (nothing about the language model is
+downloaded).
 
 ```bash
-cp .env.example .env          # fill in LLM gateway + Drive credentials
+cp .env.example .env          # LLM gateway + Drive credentials
 docker compose up --build
 ```
 
@@ -66,23 +72,19 @@ docker compose up --build
 | Dashboard | http://localhost:8001 | Studio cockpit, served to the browser |
 | Traces | http://localhost:6006 | Arize Phoenix observability |
 
-### Local — full features (uv)
+> Running from source instead of Docker: `uv sync --extra full` then
+> `uv run klerk studio` (or `make api`). Same full feature set.
 
-```bash
-uv sync --extra full          # API + local embeddings + dashboard
-cp .env.example .env
-uv run klerk chat             # or: uv run klerk studio   /   make api
-```
+### Lite — `pip install`
 
-### Lite — constrained devices (no model download)
-
-Runs the agent + dashboard with a **remote** embedding endpoint, so it fits on a
-laptop, a small VPS, or a phone:
+Runs the agent and the full dashboard against a **remote** embedding endpoint, so
+nothing is downloaded and it fits on a laptop, a small VPS, or a phone. The LLM
+gateway and Drive work exactly as in the full build.
 
 ```bash
 pip install -e ".[lite]"
 export KLERK_EMBED_BACKEND=remote KLERK_EMBED_REMOTE_URL=… KLERK_EMBED_REMOTE_MODEL=…
-klerk chat
+klerk chat                    # full-panel cockpit; add --compact for tiny terminals
 ```
 
 ---
@@ -189,9 +191,10 @@ nothing is hardcoded. Key settings:
 | `KLERK_EMBED_BACKEND` | `local` (BGE-M3) · `remote` (OpenAI-compatible) · `mock` |
 | `GOOGLE_APPLICATION_CREDENTIALS`, `DRIVE_FOLDER_ID` | Drive service account + folder |
 
-**Install profiles:** `lite` (agent + remote embed, smallest footprint) ·
-`server` (FastAPI + dashboard) · `local` (local BGE-M3 + torch) ·
-`full` (everything, the Docker default).
+**Install profiles:** `lite` (agent + remote embed — torch-free, smallest
+footprint) · `server` (FastAPI + dashboard) · `local` (local BGE-M3 +
+torch) · `parse` (layout-aware Docling parsing) · `full` (everything, the
+Docker default).
 
 ---
 
