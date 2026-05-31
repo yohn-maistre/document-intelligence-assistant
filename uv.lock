@@ -2486,10 +2486,8 @@ dependencies = [
     { name = "arize-phoenix" },
     { name = "datasets" },
     { name = "diskcache" },
-    { name = "docling" },
     { name = "faker" },
     { name = "fastapi" },
-    { name = "flagembedding" },
     { name = "google-api-python-client" },
     { name = "google-auth" },
     { name = "google-auth-oauthlib" },
@@ -2513,8 +2511,6 @@ dependencies = [
     { name = "sse-starlette" },
     { name = "tantivy" },
     { name = "textual" },
-    { name = "torch" },
-    { name = "transformers" },
     { name = "typer" },
     { name = "uvicorn" },
 ]
@@ -2527,6 +2523,7 @@ dev = [
     { name = "ruff" },
 ]
 full = [
+    { name = "docling" },
     { name = "fastapi" },
     { name = "flagembedding" },
     { name = "sse-starlette" },
@@ -2539,6 +2536,9 @@ local = [
     { name = "flagembedding" },
     { name = "torch" },
     { name = "transformers" },
+]
+parse = [
+    { name = "docling" },
 ]
 scheduled = [
     { name = "apscheduler" },
@@ -2557,16 +2557,15 @@ requires-dist = [
     { name = "arize-phoenix", specifier = ">=5.0.0" },
     { name = "datasets", specifier = ">=3.0.0" },
     { name = "diskcache", specifier = ">=5.6.3" },
-    { name = "docling", specifier = ">=2.5.0" },
+    { name = "docling", marker = "extra == 'parse'", specifier = ">=2.5.0" },
     { name = "faker", specifier = ">=30.0.0" },
     { name = "fastapi", specifier = ">=0.115.0" },
     { name = "fastapi", marker = "extra == 'server'", specifier = ">=0.115.0" },
-    { name = "flagembedding", specifier = ">=1.2.10" },
     { name = "flagembedding", marker = "extra == 'local'", specifier = ">=1.2.10" },
     { name = "google-api-python-client", specifier = ">=2.148.0" },
     { name = "google-auth", specifier = ">=2.35.0" },
     { name = "google-auth-oauthlib", specifier = ">=1.2.0" },
-    { name = "klerk", extras = ["server", "local"], marker = "extra == 'full'" },
+    { name = "klerk", extras = ["server", "local", "parse"], marker = "extra == 'full'" },
     { name = "lancedb", specifier = ">=0.13.0" },
     { name = "langchain-core", specifier = ">=0.3.0" },
     { name = "langchain-openai", specifier = ">=0.2.0" },
@@ -2593,16 +2592,14 @@ requires-dist = [
     { name = "tantivy", specifier = ">=0.22.0" },
     { name = "textual", specifier = ">=0.86.0" },
     { name = "textual-serve", marker = "extra == 'server'", specifier = ">=1.1.1" },
-    { name = "torch", specifier = ">=2.4.0" },
     { name = "torch", marker = "extra == 'local'", specifier = ">=2.4.0" },
-    { name = "transformers", specifier = ">=4.45.0" },
     { name = "transformers", marker = "extra == 'local'", specifier = ">=4.45.0" },
     { name = "typer", specifier = ">=0.12.5" },
     { name = "uvicorn", specifier = ">=0.32.0" },
     { name = "uvicorn", marker = "extra == 'server'", specifier = ">=0.32.0" },
     { name = "watchdog", marker = "extra == 'scheduled'", specifier = ">=5.0.3" },
 ]
-provides-extras = ["dev", "lite", "server", "local", "full", "scheduled"]
+provides-extras = ["dev", "lite", "server", "local", "parse", "full", "scheduled"]
 
 [[package]]
 name = "lance-namespace"

@@ -15,19 +15,18 @@ dependencies = [
     "pydantic-ai>=1.0",
     "pydantic>=2.9",
 
-    # Retrieval stack — BGE-M3 multi-head (dense + sparse + ColBERT) via
-    # FlagEmbedding; same model file does embed + late-interaction reranking.
+    # Retrieval stack — vector + lexical store. The heavy local embedder/reranker
+    # (BGE-M3 via FlagEmbedding + torch + transformers) lives in the `local`
+    # extra so a lite install (remote embeddings) stays small. All heavy imports
+    # are lazy + gated, so the base install runs the remote/mock backends fine.
     "lancedb>=0.13.0",
     "tantivy>=0.22.0",
-    "FlagEmbedding>=1.2.10",
-    "torch>=2.4.0",
-    "transformers>=4.45.0",
 
     # Knowledge graph
     "networkx>=3.3",
 
-    # Parsing
-    "docling>=2.5.0",
+    # Parsing — PyMuPDF is the lightweight base parser (lite). Layout-aware
+    # Docling (which pulls torch via docling-ibm-models) is in the `parse` extra.
     "pymupdf>=1.24.0",
 
     # Synthesis
@@ -87,16 +86,17 @@ dev = [
 
 # ─── Install-profile extras (LangFlow-style groupings) ───────────────────────
 # These mirror the deployment surfaces in §5 of the v7 plan. The base
-# `dependencies` list above is intentionally a superset today so the full test
-# suite (which mocks the LLM + embed backend) installs with `--extra dev`
-# alone. The groupings below document the *intended* lite/server/local/full
-# split for `pip install klerk[...]` packaging and let `klerk[full]` resolve.
+# `dependencies` list is the LITE runtime — no torch/FlagEmbedding — so a remote-
+# embed install stays small enough for constrained devices (e.g. a phone under
+# proot). Heavy local-inference deps live in `local`. All heavy imports are lazy
+# + gated, so the base install runs the remote/mock backends without them.
 #
-#   pip install klerk            → lite-capable (remote / mock embed backend)
+#   pip install klerk            → lite: remote / mock embed backend (no torch)
 #   pip install klerk[server]    → FastAPI + uvicorn + textual-serve surface
 #   pip install klerk[local]     → local BGE-M3 weights (FlagEmbedding/torch)
-#   pip install klerk[full]      → server + local
+#   pip install klerk[full]      → server + local (the docker-compose target)
 #
+# Tests run against the full surface: `uv sync --extra dev --extra full`.
 # `lite` is an explicit empty marker so the lite profile is nameable.
 lite = []
 server = [
@@ -112,7 +112,10 @@ local = [
     "torch>=2.4.0",
     "transformers>=4.45.0",
 ]
-full = ["klerk[server,local]"]
+# Layout-aware parsing (Docling). Heavy (pulls torch); the base PyMuPDF parser
+# covers the lite path. Set KLERK_PARSER=pymupdf to force the light parser.
+parse = ["docling>=2.5.0"]
+full = ["klerk[server,local,parse]"]
 
 # Drift agent (capability E) — scheduled nightly scan via APScheduler.
 # Kept out of the default install so the base container stays lean.

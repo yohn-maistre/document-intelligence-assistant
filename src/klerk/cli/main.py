@@ -107,7 +107,7 @@ kg_app.command("viz", help="Render the KG to interactive HTML (pyvis).")(kg_viz_
 @app.command("studio", help="Launch the Bloomberg-style Textual cockpit (floor: files/chat/activity/status/traces).")
 def studio_cmd(
     serve: Annotated[bool, typer.Option("--serve", help="Serve the studio in-browser via textual-serve (:8001).")] = False,
-    lite: Annotated[bool, typer.Option("--lite", help="Chat-only layout for narrow (<120 col) terminals.")] = False,
+    compact: Annotated[bool, typer.Option("--compact", help="Chat-only layout (drops side panels) for very cramped terminals. The full cockpit is the default.")] = False,
     mode: Annotated[str, typer.Option("--mode", help="Engine mode: 'lite' (in-process orchestrator) or 'full' (SSE to /chat).")] = "lite",
     base_url: Annotated[str, typer.Option("--base-url", help="FastAPI base URL used by 'full' mode.")] = "http://localhost:8000",
     locale: Annotated[str, typer.Option("--locale", "-l", help="en | id")] = "en",
@@ -122,7 +122,7 @@ def studio_cmd(
             console.print(f"[yellow]{e}[/yellow]")
             raise typer.Exit(code=1) from e
         return
-    studio_app.run(mode=mode, base_url=base_url, locale=locale, lite=lite)
+    studio_app.run(mode=mode, base_url=base_url, locale=locale, compact=compact)
 
 
 # ─── Top-level utility verbs ─────────────────────────────────────────────────
@@ -213,17 +213,18 @@ def _phoenix_section() -> None:
         )
 
 
-# ─── Chat: focused chat-only view of the studio cockpit ─────────────────────
+# ─── Chat: opens the full studio cockpit (in-process engine by default) ──────
 @app.command()
 def chat(
     locale: Annotated[str, typer.Option("--locale", "-l", help="en | id")] = "en",
     mode: Annotated[str, typer.Option("--mode", help="Engine mode: 'lite' (in-process orchestrator) or 'full' (SSE to /chat).")] = "lite",
     base_url: Annotated[str, typer.Option("--base-url", help="FastAPI base URL used by 'full' mode.")] = "http://localhost:8000",
+    compact: Annotated[bool, typer.Option("--compact", help="Chat-only layout (drops side panels) for very cramped terminals.")] = False,
 ) -> None:
-    """Open the klerk chat TUI — a focused, chat-only view of the studio cockpit."""
+    """Open the klerk studio cockpit (full panels), defaulting to the in-process engine."""
     from klerk.studio import app as studio_app
 
-    studio_app.run(mode=mode, base_url=base_url, locale=locale, lite=True)
+    studio_app.run(mode=mode, base_url=base_url, locale=locale, compact=compact)
 
 
 # ── memory (Hermes trio: SOUL.md + MEMORY.md + LanceDB recall) ───────────────

@@ -20,8 +20,9 @@ Two run paths:
 * ``serve(...)`` — same app over the browser via ``textual-serve`` (guarded
   import; the dep lands in pyproject's ``server`` extra via session S5).
 
-A ``--lite`` (or narrow-terminal, <120 cols) fallback drops to a chat-only
-layout so the dashboard stays usable in cramped terminals.
+The full cockpit renders by default on any terminal width. ``--compact`` opts
+into a chat-only layout for very cramped terminals. ("lite" elsewhere refers to
+the backend — remote embeddings / in-process engine — never the UI.)
 """
 
 from __future__ import annotations
@@ -42,8 +43,6 @@ from klerk.studio.widgets import (
     StatusBar,
     TracesPanel,
 )
-
-NARROW_COLS = 120
 
 
 def _bonus_widgets() -> list[Widget]:
@@ -126,12 +125,10 @@ class KlerkStudio(App):
 
     @property
     def _use_lite_layout(self) -> bool:
-        if self._force_lite_layout:
-            return True
-        try:
-            return self.size.width < NARROW_COLS
-        except Exception:  # noqa: BLE001 — size unavailable pre-mount
-            return False
+        # Full cockpit by default (on any terminal width); the compact,
+        # chat-only layout is strictly opt-in via --compact. "lite" elsewhere
+        # refers to the backend (remote embed / in-process engine), not the UI.
+        return self._force_lite_layout
 
     def compose(self) -> ComposeResult:
         yield StatusBar(mode=self.mode, base_url=self.base_url, id="status-bar")
@@ -179,11 +176,11 @@ def run(
     mode: str = "lite",
     base_url: str = "http://localhost:8000",
     locale: str = "en",
-    lite: bool = False,
+    compact: bool = False,
 ) -> None:
     """Run the terminal TUI (the ``klerk studio`` entry point)."""
     KlerkStudio(
-        mode=mode, base_url=base_url, locale=locale, lite_layout=lite
+        mode=mode, base_url=base_url, locale=locale, lite_layout=compact
     ).run()
 
 
@@ -222,7 +219,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(prog="klerk-studio")
     parser.add_argument("--serve", action="store_true", help="serve in browser")
     parser.add_argument("--served", action="store_true", help=argparse.SUPPRESS)
-    parser.add_argument("--lite", action="store_true", help="chat-only layout")
+    parser.add_argument("--compact", action="store_true", help="chat-only layout")
     parser.add_argument("--mode", default="lite", choices=["lite", "full"])
     parser.add_argument("--base-url", default="http://localhost:8000")
     parser.add_argument("--locale", default="en")
@@ -231,7 +228,7 @@ def main() -> None:
     if args.serve:
         serve(mode="full", base_url=args.base_url)
         return
-    run(mode=args.mode, base_url=args.base_url, locale=args.locale, lite=args.lite)
+    run(mode=args.mode, base_url=args.base_url, locale=args.locale, compact=args.compact)
 
 
 if __name__ == "__main__":
