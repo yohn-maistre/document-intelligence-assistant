@@ -43,15 +43,36 @@ def parse(path: str | Path) -> ParsedDocument:
         raise FileNotFoundError(f"parse: file not found: {p}")
 
     suffix = p.suffix.lower()
+    parser = os.environ.get("KLERK_PARSER", "docling")
 
     if suffix in _NATIVE_TEXT:
         return _parse_native(p, suffix)
 
-    if suffix == ".pdf" and os.environ.get("KLERK_PARSER", "docling") == "pymupdf":
-        return _parse_pymupdf(p)
+    # PDF: PyMuPDF when requested or as a Docling fallback (lite installs).
+    if suffix == ".pdf":
+        if parser == "pymupdf":
+            return _parse_pymupdf(p)
+        try:
+            return _parse_docling(p)
+        except Exception:  # noqa: BLE001
+            return _parse_pymupdf(p)
+
+    # DOCX: native python-docx unless Docling is explicitly chosen AND present.
+    # python-docx reads Unicode from the XML → CJK/Bahasa extract cleanly,
+    # font/version-independent (PDF glyph extraction is not).
+    if suffix == ".docx":
+        if parser != "docling":
+            return _parse_docx(p)
+        try:
+            return _parse_docling(p)
+        except Exception:  # noqa: BLE001
+            return _parse_docx(p)
 
     if suffix in _DOCLING_FORMATS:
-        return _parse_docling(p)
+        try:
+            return _parse_docling(p)
+        except Exception:  # noqa: BLE001
+            return _parse_native(p, suffix)
 
     # Unknown extension — try Docling (it handles many formats), fall back to text read
     try:
@@ -103,6 +124,29 @@ def _parse_pymupdf(p: Path) -> ParsedDocument:
         text=text,
         locale=_sniff_locale(text),
         meta={"parser": "pymupdf", "suffix": ".pdf", "page_count": len(pages)},
+    )
+
+
+# ─── Native DOCX reader (python-docx) ─────────────────────────────────────────
+def _parse_docx(p: Path) -> ParsedDocument:
+    """DOCX via python-docx — paragraphs + tables, no torch/Docling.
+
+    Reads the document's Unicode text straight from the XML, so CJK / Bahasa
+    text extracts cleanly regardless of fonts or library versions.
+    """
+    from docx import Document
+
+    d = Document(str(p))
+    parts: list[str] = [para.text for para in d.paragraphs]
+    for table in d.tables:
+        for row in table.rows:
+            parts.append(" | ".join(c.text for c in row.cells))
+    text = "\n".join(s for s in parts if s and s.strip())
+    return ParsedDocument(
+        source=p,
+        text=text,
+        locale=_sniff_locale(text),
+        meta={"parser": "python-docx", "suffix": ".docx"},
     )
 
 

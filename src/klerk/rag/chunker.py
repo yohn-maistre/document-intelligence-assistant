@@ -159,7 +159,10 @@ def _split_sentences(text: str) -> list[str]:
 
 def _hard_split(text: str, max_tokens: int) -> list[str]:
     """Last-resort: split by token count when no natural break helps."""
-    enc = _encoder()
+    name, enc = _tokenizer_backend()
+    if enc is None:  # char-heuristic backend (~4 chars/token) — split by chars
+        max_chars = max(1, max_tokens * 4)
+        return [text[i : i + max_chars] for i in range(0, len(text), max_chars)] or [text]
     tokens = enc.encode(text)
     pieces: list[str] = []
     for start in range(0, len(tokens), max_tokens):
