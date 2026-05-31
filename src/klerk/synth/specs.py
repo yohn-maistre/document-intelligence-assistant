@@ -492,7 +492,7 @@ CORPUS: list[DocSpec] = [
     DocSpec(
         doc_id="hr_tokyo_shugyo_kisoku",
         category="hr",
-        format="pdf",
+        format="docx",
         locale="ja",
         title="東京サテライトオフィス就業規則",
         brief=(
@@ -544,7 +544,7 @@ CORPUS: list[DocSpec] = [
     DocSpec(
         doc_id="sop_jp_incident_taiou",
         category="sop",
-        format="pdf",
+        format="docx",
         locale="ja",
         title="インシデント対応手順書（東京オフィス版）",
         brief=(
@@ -569,7 +569,7 @@ CORPUS: list[DocSpec] = [
     DocSpec(
         doc_id="minutes_cac_jp_steering",
         category="minutes",
-        format="pdf",
+        format="docx",
         locale="ja",
         title="議事録 — CACホールディングス データ基盤刷新 ステアリングコミッティ（第3回）",
         brief=(
