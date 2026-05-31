@@ -39,6 +39,8 @@ services:
       KLERK_LANCEDB_DIR: /app/.lancedb
       KLERK_DISKCACHE_DIR: /app/.diskcache
       PHOENIX_WORKING_DIR: /app/.phoenix
+      # Boot Phoenix inside the API process so :6006 serves traces live.
+      KLERK_PHOENIX_AUTOLAUNCH: "1"
       KLERK_DRIVE_DOWNLOAD_DIR: /app/data/drive
       # Drive Service Account path (mounted via volume below).
       GOOGLE_APPLICATION_CREDENTIALS: /app/.secrets/service-account.json

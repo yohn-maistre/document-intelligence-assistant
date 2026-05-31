@@ -93,10 +93,21 @@ class LatencyMiddleware(BaseHTTPMiddleware):
         return response
 
 
-# ─── Lifespan: minimal — models lazy-load on first hit ───────────────────────
+# ─── Lifespan: state dir + optional Phoenix autolaunch ───────────────────────
 @asynccontextmanager
 async def _lifespan(_app: FastAPI):
     _state_dir().mkdir(parents=True, exist_ok=True)
+    # Boot the embedded Phoenix UI (:6006) + LiteLLM instrumentation when
+    # KLERK_PHOENIX_AUTOLAUNCH=1 (set in docker-compose) so traces are live for
+    # the reviewer. Best-effort: a Phoenix failure must never block the API.
+    if os.environ.get("KLERK_PHOENIX_AUTOLAUNCH", "0") == "1":
+        try:
+            from klerk.obs.phoenix import instrument_litellm, launch
+
+            launch(open_browser=False)
+            instrument_litellm()
+        except Exception:  # noqa: BLE001 — observability is non-fatal
+            pass
     yield
 
 
