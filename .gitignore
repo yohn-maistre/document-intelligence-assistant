@@ -46,9 +46,9 @@ out/
 .phoenix/
 # .klerk/: checkpoint db + bg state + bg last cycle report
 .klerk/
-# .planning/: scratch plans + notes
-# (was gitignored; now committed so v6-plan.md persists across sessions)
-# .planning/
+# Internal planning + handoff notes — not part of the public submission.
+.planning/
+HANDOFF.md
 *.sqlite
 *.sqlite-journal
 *.sqlite-wal

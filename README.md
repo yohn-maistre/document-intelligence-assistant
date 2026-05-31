@@ -1,9 +1,10 @@
 # klerk
 
-> **Chat with your company's documents — privately.** klerk is a self-hosted
+> **Chat with your company's documents — privately.** klerk is a
 > document-intelligence agent that ingests your files from Google Drive, answers
-> questions with grounded citations, and runs entirely against *your own* LLM —
-> no third-party AI APIs, no data leaving your perimeter.
+> questions with grounded citations, and routes every generation through a
+> **private LLM gateway you configure** — no third-party AI APIs, no data leaving
+> your perimeter.
 
 ![Python](https://img.shields.io/badge/python-3.11+-blue)
 ![FastAPI](https://img.shields.io/badge/API-FastAPI-009688)
@@ -30,9 +31,10 @@ into cron jobs, scripts, and other agents as cleanly as it serves humans.
   and streams its reasoning as it goes.
 - **Google Drive ingestion** — incremental sync detects new / modified / deleted
   files; handles PDF, DOCX, Markdown, and plain text.
-- **Self-hosted LLM only** — all generation routes through a single configurable
-  gateway (no OpenAI / Anthropic / Cohere). Your documents never leave your
-  network.
+- **Private LLM gateway only** — all generation routes through a single
+  configured endpoint (no OpenAI / Anthropic / Cohere). Point it at your
+  organization's provided proxy or your own model server; your documents never
+  leave your network.
 - **Multilingual** — BGE-M3 embeddings + a multilingual model give first-class
   Bahasa Indonesia support alongside English.
 - **Long-term memory** — a persistent identity + recalled-facts layer so the
@@ -61,8 +63,11 @@ embedding model (BGE-M3) locally** so retrieval runs on-box; the **LLM stays
 remote** via your configured gateway (nothing about the language model is
 downloaded).
 
+**1. Configure + boot.**
+
 ```bash
-cp .env.example .env          # LLM gateway + Drive credentials
+cp .env.example .env          # fill in the LLM gateway creds (from the bundle)
+# put your Google Drive service-account JSON at: .secrets/service-account.json
 docker compose up --build
 ```
 
@@ -72,19 +77,32 @@ docker compose up --build
 | Dashboard | http://localhost:8001 | Studio cockpit, served to the browser |
 | Traces | http://localhost:6006 | Arize Phoenix observability |
 
-> Running from source instead of Docker: `uv sync --extra full` then
-> `uv run klerk studio` (or `make api`). Same full feature set.
-
-### Lite — `pip install`
-
-Runs the agent and the full dashboard against a **remote** embedding endpoint, so
-nothing is downloaded and it fits on a laptop, a small VPS, or a phone. The LLM
-gateway and Drive work exactly as in the full build.
+**2. Generate the demo corpus and index it** (first run only — produces ~30
+synthetic company documents via the gateway, then embeds them):
 
 ```bash
-pip install -e ".[lite]"
+docker compose exec api klerk synth gen
+docker compose exec api klerk index build --src data/synth/fata_organa --rebuild
+```
+
+**3. Ask.** Chat in the dashboard (`:8001`), hit `POST /chat` on the API, or
+ingest your *own* Drive folder instead of the demo corpus with `POST /ingest`
+(`DRIVE_FOLDER_ID` in `.env`). Evaluate with `docker compose exec api klerk eval run`.
+
+> Running from source instead of Docker: `uv sync --extra full`, then the same
+> `klerk synth gen` / `index build` / `klerk studio`.
+
+### Lite — `pip install` (constrained devices)
+
+Runs the agent and the full dashboard against a **remote** embedding endpoint, so
+nothing is downloaded and it fits on a laptop, a small VPS, or a phone (~190
+packages, no torch). The LLM gateway and Drive work exactly as in the full build.
+
+```bash
+pip install -e ".[lite,synth]"   # +synth to generate the demo corpus
 export KLERK_EMBED_BACKEND=remote KLERK_EMBED_REMOTE_URL=… KLERK_EMBED_REMOTE_MODEL=…
-klerk chat                    # full-panel cockpit; add --compact for tiny terminals
+klerk synth gen && klerk index build --src data/synth/fata_organa --rebuild
+klerk chat                       # full-panel cockpit; add --compact for tiny terminals
 ```
 
 ---
@@ -111,7 +129,7 @@ klerk chat                    # full-panel cockpit; add --compact for tiny termi
    └──────────────────────────────────────────────────────────────────────┘
             │
    ┌────────┴───────────────────────────┐
-   │  LLM gateway (LiteLLM)             │  ← self-hosted only; env-configured
+   │  LLM gateway (LiteLLM)             │  ← provided/private endpoint, env-configured
    └────────────────────────────────────┘
 ```
 
@@ -128,7 +146,7 @@ rationale in [docs/architecture.md](docs/architecture.md).
 |-------|--------|-----|
 | API | **FastAPI** + Pydantic | async, typed, auto OpenAPI |
 | Agent orchestration | **LangGraph** (multi-step flows) + **PydanticAI** (typed one-shots) | graph where state matters; typed calls everywhere else |
-| LLM gateway | **LiteLLM** → self-hosted endpoint | one config-driven entry point, no vendor lock-in |
+| LLM gateway | **LiteLLM** → configured private endpoint | one config-driven entry point, no vendor lock-in |
 | Embeddings | **BGE-M3** (local) or any OpenAI-compatible endpoint (remote) | multilingual, 1024-d, Bahasa-strong; pluggable |
 | Vector store | **LanceDB** (embedded) | vector + lexical search in one process, no sidecar DB |
 | Retrieval | hybrid (vector + **Tantivy** BM25) → **RRF** → **ColBERT** rerank | recall *and* precision; reranker reuses the embedder weights |
@@ -165,18 +183,19 @@ or `POST /chat` (SSE stream with citations).
 
 ---
 
-## Generate a sample corpus
+## Generate & share a sample corpus
 
-No documents yet? klerk can generate a realistic company corpus to demo against —
-HR policies, technical SOPs, meeting minutes with action items, FAQs, and org
-charts, in English and Bahasa Indonesia, across PDF/DOCX/MD — then push it to
-Drive:
+`klerk synth gen` (in the quick start above) produces a realistic company corpus —
+HR policies, SOPs, meeting minutes with action items, FAQs, and org charts, in
+English and Bahasa Indonesia across PDF/DOCX/MD. To publish it to a Drive folder
+you own (e.g. to share with a reviewer):
 
 ```bash
-uv run klerk synth gen                                   # generate the documents
-uv run klerk index build --src data/synth/fata_organa    # index them
-uv run klerk drive upload data/synth/fata_organa --to "$DRIVE_FOLDER_ID"
+klerk drive upload data/synth/fata_organa --to "$DRIVE_FOLDER_ID" --dry-run   # preview
+klerk drive upload data/synth/fata_organa --to "$DRIVE_FOLDER_ID"             # upload
 ```
+
+See [DATA_GENERATION.md](DATA_GENERATION.md) for methodology + QC.
 
 ---
 
@@ -200,12 +219,13 @@ BGE-M3 + torch) · `parse` (Docling) · `eval` (RAGAS) · `obs` (Phoenix) ·
 
 ## Roadmap
 
-klerk today is a self-hosted, single-workspace agent. Where it's headed:
+klerk today is a single-workspace agent you run on your own infrastructure.
+Where it's headed:
 
 - **Self-serve Drive connect** — OAuth flow so any user can link their own Drive
   (today: service account).
-- **Pluggable LLM backends** — bring-your-own OpenAI-compatible gateway alongside
-  the self-hosted default.
+- **Pluggable LLM backends** — point at any OpenAI-compatible gateway alongside
+  the provided default endpoint.
 - **Omni-channel chat** — talk to your documents from **WhatsApp, Telegram, and
   Slack**, not just the API/TUI, so the assistant meets teams where they already
   work.

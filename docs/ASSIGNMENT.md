@@ -8,8 +8,9 @@
 
 Build a production-ready Document Intelligence Assistant for a fictional
 Indonesian-Japanese tech firm: ingest from Google Drive, RAG over a synthetic
-corpus, serve via FastAPI, use **only** the provided self-hosted LLM
-(`nemotron-3-nano-omni` over a private LiteLLM + Cloudflare Access gateway), ship
+corpus, serve via FastAPI, use **only** the provided LLM endpoint
+(`nemotron-3-nano-omni`, reached over the firm's private LiteLLM + Cloudflare
+Access proxy — not self-hosted by klerk), ship
 ≥1 agentic capability, evaluate against an own 20-question set, and run via
 `docker compose up`.
 
