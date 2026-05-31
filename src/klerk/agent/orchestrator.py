@@ -61,6 +61,30 @@ def _agent(locale: str):
     return create_react_agent(_chat_model(locale), ALL_TOOLS)
 
 
+def _memory_prefix(query: str) -> str:
+    """SOUL.md + recalled facts, to PREFIX the system prompt each turn.
+
+    Guarded end-to-end: if the memory dir is missing, empty, or anything
+    raises, returns "" so a chat turn never crashes on memory.
+    """
+    try:
+        from klerk.memory import MemoryStore
+
+        store = MemoryStore()
+        soul = store.read_soul().strip()
+        facts = store.recall(query, k=4)
+    except Exception:  # noqa: BLE001 - memory is best-effort, never fatal
+        return ""
+
+    blocks: list[str] = []
+    if soul:
+        blocks.append(f"# IDENTITY (SOUL)\n{soul}")
+    if facts:
+        lines = "\n".join(f"- {f.fact}" for f in facts)
+        blocks.append(f"# RECALLED MEMORY (durable facts; verify against sources)\n{lines}")
+    return "\n\n".join(blocks)
+
+
 def _confidence(answer: str, n_grounding: int) -> tuple[list[str], float]:
     """Citation extraction + a coarse confidence signal mirroring the v5 rule."""
     citations = sorted({f"{m.group(1)}:{m.group(2)}" for m in _CITATION_RE.finditer(answer)})
@@ -96,7 +120,11 @@ async def arun(
     n_grounding = len(seed_hits)
     seed_context = "\n\n".join(f"[{h.chunk_id}] {h.text}" for h in seed_hits)
 
-    messages: list[dict[str, str]] = [{"role": "system", "content": ORCHESTRATOR_SYSTEM}]
+    # Prefix the system prompt with klerk's SOUL + recalled memory (best-effort).
+    mem_prefix = _memory_prefix(query)
+    system_content = f"{mem_prefix}\n\n{ORCHESTRATOR_SYSTEM}" if mem_prefix else ORCHESTRATOR_SYSTEM
+
+    messages: list[dict[str, str]] = [{"role": "system", "content": system_content}]
     if history:
         messages.extend(history)
     user_block = query

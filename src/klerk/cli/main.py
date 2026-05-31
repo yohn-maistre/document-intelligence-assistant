@@ -227,6 +227,17 @@ def chat(
     )
 
 
+# ── memory (Hermes trio: SOUL.md + MEMORY.md + LanceDB recall) ───────────────
+from klerk.cli import memory_cmd  # noqa: E402
+
+memory_app = typer.Typer(name="memory", help="Long-term memory — SOUL / MEMORY / recall.", no_args_is_help=True)
+app.add_typer(memory_app)
+memory_app.command("recall", help="Recall durable facts (hybrid vector + BM25 + RRF).")(memory_cmd.recall)
+memory_app.command("save", help="Save a durable fact (appends MEMORY.md + embeds).")(memory_cmd.save)
+memory_app.command("show-soul", help="Print SOUL.md (seeded with the klerk persona).")(memory_cmd.show_soul)
+memory_app.command("edit-soul", help="Open SOUL.md in $EDITOR.")(memory_cmd.edit_soul)
+
+
 # ─── Q&A and doc-writer verbs ────────────────────────────────────────────────
 app.command("ask", help="Q&A over the corpus (CRAG-lite + citations).")(ask_cmd)
 app.command("write", help="Adversarial doc-writer (Drafter-A vs Drafter-B + Adjudicator + Critic).")(write_cmd)
