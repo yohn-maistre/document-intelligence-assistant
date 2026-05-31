@@ -1,10 +1,11 @@
 # klerk
 
-> **Chat with your company's documents — privately.** klerk is a
-> document-intelligence agent that ingests your files from Google Drive, answers
-> questions with grounded citations, and routes every generation through a
-> **private LLM gateway you configure** — no third-party AI APIs, no data leaving
-> your perimeter.
+> **Company document intelligence — for humans and for agents.** klerk ingests
+> your files from Google Drive, answers questions with grounded citations, and
+> routes every generation through a private LLM gateway you configure (no
+> third-party AI APIs). Drive it as a FastAPI service, a terminal/browser
+> cockpit, or an `--agent/--json` CLI that scripts, cron, and other agents
+> consume the same way.
 
 ![Python](https://img.shields.io/badge/python-3.11+-blue)
 ![FastAPI](https://img.shields.io/badge/API-FastAPI-009688)
@@ -12,12 +13,10 @@
 ![Tests](https://img.shields.io/badge/tests-247%20passing-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-black)
 
-klerk pairs hybrid retrieval (dense + lexical + reranking) with an agentic chat
-loop that knows when to search, when to cross-check sources, and when to say
-*"I don't know"* rather than guess. It speaks **English and Bahasa Indonesia**,
-ships two polished surfaces — a **FastAPI service** and a **terminal/browser
-cockpit** — and exposes every capability as an agent-friendly CLI so it slots
-into cron jobs, scripts, and other agents as cleanly as it serves humans.
+Under the hood it pairs hybrid retrieval (dense + lexical + reranking) with an
+agentic chat loop that knows when to search, when to cross-check sources, and
+when to say *"I don't know"* rather than guess — and it speaks **English and
+Bahasa Indonesia**.
 
 ---
 
