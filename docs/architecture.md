@@ -66,7 +66,6 @@ LanceDB does double duty: corpus retrieval + semantic LLM cache. One primitive, 
 
 ## See also
 
-- [`design-decisions.md`](./design-decisions.md) — every framework pick + every runner-up rejected, with the Anthropic citations as the spine.
-- [`proposal-rubric.md`](./proposal-rubric.md) — the custom 5-axis rubric calibration set.
-- [`bahasa-eval.md`](./bahasa-eval.md) — SEA-HELM-style Bahasa methodology.
-- [`2026-landscape.md`](./2026-landscape.md) — LightRAG / HippoRAG 2 / GraphRAG / Pi / Hermes / Goose references, including Anthropic's *Dynamic Workflows* (May 2026).
+- [`ASSIGNMENT.md`](./ASSIGNMENT.md) — brief mapping + compliance.
+- [`../EVAL.md`](../EVAL.md) — evaluation methodology + results.
+- [`../DATA_GENERATION.md`](../DATA_GENERATION.md) — corpus generation + QC.

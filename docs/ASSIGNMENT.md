@@ -67,8 +67,8 @@ clearly secondary to the MVP.)*
 ## Honest caveats
 
 - **Eval numbers + the connectivity confirmation** are produced by running the
-  pipeline against the live gateway (see [RUNBOOK](RUNBOOK.md)); methodology in
-  EVAL.md is final, numbers are filled from an actual run.
+  pipeline against the live gateway (the quick start in the README); methodology
+  in EVAL.md is final, numbers are filled from an actual run.
 - **`docker compose up --build`** is configured and statically validated; the
   full image build is exercised on a network without registry restrictions.
 - **LLM-as-judge** shares the generation model — absolute eval scores skew

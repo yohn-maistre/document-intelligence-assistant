@@ -241,7 +241,6 @@ Where it's headed:
 | Doc | Contents |
 |-----|----------|
 | [docs/architecture.md](docs/architecture.md) | Full architecture + data flow |
-| [docs/design-decisions.md](docs/design-decisions.md) | Why these choices (incl. the embedder/reranker evaluation) |
 | [DATA_GENERATION.md](DATA_GENERATION.md) | How the sample corpus is generated + QC |
 | [EVAL.md](EVAL.md) | Evaluation methodology, rubric, and results |
 | [docs/ASSIGNMENT.md](docs/ASSIGNMENT.md) | Take-home brief mapping + compliance |
