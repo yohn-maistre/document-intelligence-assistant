@@ -77,9 +77,15 @@ def _bonus_widgets() -> list[Widget]:
 class KlerkStudio(App):
     """The floor dashboard. Composes the five floor panes in a Grid."""
 
+    # Responsive: <100 cols (phones, split panes) stack the cockpit vertically;
+    # >=100 cols render the full three-column Bloomberg grid. Textual applies the
+    # matching class to the Screen automatically on resize.
+    HORIZONTAL_BREAKPOINTS = [(0, "-narrow"), (100, "-wide")]
+
     CSS = (
         STUDIO_CSS
         + """
+    /* ── wide: the three-column cockpit ── */
     #studio-grid {
         grid-size: 3 1;
         grid-columns: 28 1fr 34;
@@ -92,6 +98,19 @@ class KlerkStudio(App):
     #right-rail > KgSnapshot { height: 14; }
     #right-rail > SparkGraph { height: 16; }
     #lite-root { height: 1fr; }
+
+    /* ── narrow (phones): same panes, stacked + scrollable ── */
+    .-narrow #studio-grid {
+        layout: vertical;
+        overflow-y: auto;
+        overflow-x: hidden;
+    }
+    .-narrow #files-pane { width: 1fr; height: 9; }
+    .-narrow #chat-pane  { width: 1fr; height: 24; }
+    .-narrow #right-rail { width: 1fr; height: auto; overflow: hidden; }
+    .-narrow #right-rail > * { width: 1fr; }
+    /* shed low-priority status items so the bar never truncates the model */
+    .-narrow #status-ctx, .-narrow #status-sync { display: none; }
     """
     )
 

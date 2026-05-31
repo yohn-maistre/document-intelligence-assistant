@@ -22,7 +22,7 @@ from typing import Any
 from textual import work
 from textual.app import ComposeResult
 from textual.containers import Container, VerticalScroll
-from textual.widgets import Collapsible, Input, Markdown, Static
+from textual.widgets import Collapsible, Input, LoadingIndicator, Markdown, Static
 
 
 class LiveChat(Container):
@@ -42,6 +42,12 @@ class LiveChat(Container):
         dock: bottom;
         border: tall $primary;
     }
+    LiveChat #chat-loader {
+        height: 1;
+        display: none;
+        color: $primary;
+    }
+    LiveChat #chat-loader.-busy { display: block; }
     LiveChat .user-msg {
         color: $secondary;
         text-style: bold;
@@ -84,7 +90,12 @@ class LiveChat(Container):
             ),
             id="chat-log",
         )
+        yield LoadingIndicator(id="chat-loader")
         yield Input(placeholder="Ask klerk…  (Enter to send)", id="chat-input")
+
+    def _set_busy(self, busy: bool) -> None:
+        """Toggle the one-row thinking spinner above the input."""
+        self.query_one("#chat-loader").set_class(busy, "-busy")
 
     @property
     def _log(self) -> VerticalScroll:
@@ -100,6 +111,7 @@ class LiveChat(Container):
         self._answer_buf = ""
         self._answer_md = Markdown("")
         await self._mount(self._answer_md)
+        self._set_busy(True)
         if self.mode == "full":
             self._run_full(query)
         else:
@@ -143,6 +155,7 @@ class LiveChat(Container):
             tail = f"_citations: {', '.join(cites) or 'none'} · confidence {conf:.2f}_"
             await self._mount(Static(tail, classes="meta"))
         elif event == "done":
+            self._set_busy(False)
             await self._mount(
                 Static(
                     f"[dim]done · {data.get('tool_hops', 0)} hop(s) · "
@@ -151,6 +164,7 @@ class LiveChat(Container):
                 )
             )
         elif event == "error":
+            self._set_busy(False)
             await self._mount(
                 Static(f"[b red]error:[/b red] {data.get('detail', '?')}", classes="meta")
             )
