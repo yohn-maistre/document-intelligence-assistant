@@ -21,7 +21,7 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field, ValidationError, field_validator
 
 from klerk.synth.specs import CORPUS, DocSpec
 
@@ -32,9 +32,29 @@ class DocSection(BaseModel):
     paragraphs: list[str] = Field(default_factory=list)
 
 
+def _cell_to_str(c: Any) -> str:
+    """Coerce a table cell to a string (the model often emits numeric cells)."""
+    return "" if c is None else str(c)
+
+
 class DocTable(BaseModel):
     headers: list[str]
     rows: list[list[str]]
+
+    @field_validator("headers", mode="before")
+    @classmethod
+    def _coerce_headers(cls, v: Any) -> Any:
+        return [_cell_to_str(c) for c in v] if isinstance(v, list) else v
+
+    @field_validator("rows", mode="before")
+    @classmethod
+    def _coerce_rows(cls, v: Any) -> Any:
+        if not isinstance(v, list):
+            return v
+        return [
+            [_cell_to_str(c) for c in (row if isinstance(row, list) else [row])]
+            for row in v
+        ]
 
 
 class DocBody(BaseModel):
