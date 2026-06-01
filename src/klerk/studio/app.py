@@ -27,6 +27,7 @@ the backend — remote embeddings / in-process engine — never the UI.)
 
 from __future__ import annotations
 
+import contextlib
 from typing import Any
 
 from textual.app import App, ComposeResult
@@ -224,17 +225,14 @@ class KlerkStudio(App):
             return
         self.screen.toggle_class("-zoom")
         if self.screen.has_class("-zoom"):
-            try:
+            # focus is best-effort — the input may not be mounted yet
+            with contextlib.suppress(Exception):
                 self.query_one("#chat-input").focus()
-            except Exception:  # noqa: BLE001 — focus is best-effort
-                pass
 
     def on_live_chat_ctx_tokens(self, message: LiveChat.CtxTokens) -> None:
         """Reflect the running conversation token estimate in the status bar."""
-        try:
+        with contextlib.suppress(Exception):  # status bar is best-effort
             self.query_one(StatusBar).set_ctx_tokens(message.tokens)
-        except Exception:  # noqa: BLE001 — status bar is best-effort
-            pass
 
 
 # ─── Entry points ─────────────────────────────────────────────────────────────
