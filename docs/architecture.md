@@ -55,7 +55,7 @@
 
 | Primitive | What it holds | Where |
 |---|---|---|
-| **LanceDB (corpus table)** | Document chunks + BGE-M3 embeddings; hybrid query via Tantivy BM25 + vector RRF | `.lancedb/corpus.lance` |
+| **LanceDB (corpus table)** | Document chunks + BGE-M3 embeddings; hybrid query via native BM25 FTS + vector RRF | `.lancedb/corpus.lance` |
 | **LanceDB (`llm_cache` table)** | Prompt embedding → cached response (semantic cache, sim > 0.95) | `.lancedb/llm_cache.lance` |
 | **NetworkX KG (JSON)** | Entities + relations extracted via Pydantic AI structured output | `data/kg/graph.json` |
 | **Phoenix SQLite** | OpenInference traces; powers the Studio Trace panel + replay | `.phoenix/phoenix.db` |

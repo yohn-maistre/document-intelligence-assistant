@@ -1,4 +1,4 @@
-"""LanceDB hybrid store — vector + Tantivy BM25 in one table.
+"""LanceDB hybrid store — vector + native BM25 FTS in one table.
 
 One table per corpus split:
   - `corpus` — the working RAG store

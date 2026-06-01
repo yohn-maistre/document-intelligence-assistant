@@ -124,7 +124,7 @@ klerk chat                       # full-panel cockpit; add --compact for tiny te
             │
    ┌────────┴─────────────────────────────────────────────────────────────┐
    │  Retrieval:  Docling parse → chunk → BGE-M3 embed → LanceDB           │
-   │              (vector + Tantivy BM25) → RRF fusion → ColBERT rerank    │
+   │              (vector + native BM25 FTS) → RRF fusion → ColBERT rerank │
    └──────────────────────────────────────────────────────────────────────┘
             │
    ┌────────┴───────────────────────────┐
@@ -148,7 +148,7 @@ rationale in [docs/architecture.md](docs/architecture.md).
 | LLM gateway | **LiteLLM** → configured private endpoint | one config-driven entry point, no vendor lock-in |
 | Embeddings | **BGE-M3** (local) or any OpenAI-compatible endpoint (remote) | multilingual, 1024-d, Bahasa-strong; pluggable |
 | Vector store | **LanceDB** (embedded) | vector + lexical search in one process, no sidecar DB |
-| Retrieval | hybrid (vector + **Tantivy** BM25) → **RRF** → **ColBERT** rerank | recall *and* precision; reranker reuses the embedder weights |
+| Retrieval | hybrid (vector + **LanceDB native BM25 FTS**) → **RRF** → **ColBERT** rerank | recall *and* precision; reranker reuses the embedder weights |
 | Parsing | **Docling** (PyMuPDF fallback) | layout-aware across PDF/DOCX/MD/TXT |
 | UI | **Textual** + **textual-serve** | terminal and browser from one Python codebase |
 | CLI | **Typer** with `--agent/--json` | human tables + machine JSON |

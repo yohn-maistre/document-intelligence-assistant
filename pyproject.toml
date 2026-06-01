@@ -1,7 +1,7 @@
 [project]
 name = "klerk"
 version = "0.0.1"
-description = "Document Intelligence Assistant — hybrid retrieval via BGE-M3 multi-head (dense + sparse + ColBERT) over LanceDB + Tantivy, LangGraph for conflict orchestration, served via FastAPI against Nemotron through a Cloudflare-tunneled LiteLLM proxy."
+description = "Document Intelligence Assistant — hybrid retrieval via BGE-M3 multi-head (dense + sparse + ColBERT) over LanceDB (native BM25 FTS), LangGraph for the chat agent and doc-writer/conflict graphs (single-shot Q&A uses a hand-rolled CRAG loop), served via FastAPI against Nemotron through a Cloudflare-tunneled LiteLLM proxy."
 readme = "README.md"
 requires-python = ">=3.11"
 authors = [{ name = "yohn-maistre" }]

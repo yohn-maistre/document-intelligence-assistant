@@ -24,7 +24,7 @@ The May 2026 *Dynamic Workflows* paradigm (Claude Code, Opus 4.8) reinforces thi
 | Chat harness | `klerk-cli` (TS, Ink banner) + Pi as hidden runtime | The brand identity is ours; Pi gives us a diff-rendered TUI for free. |
 | Orchestration | Hand-rolled ReAct + CRAG-lite loop in Python (~200 LOC) | Anthropic stance. Loop ownership = system ownership. |
 | LLM gateway | LiteLLM SDK (in-process, not proxy) | One library = fallbacks + cost tracking + cache hooks, no extra process. |
-| Vector + BM25 | LanceDB native hybrid (Tantivy FTS) | Embedded, no Docker, March 2026 hybrid one-call API. |
+| Vector + BM25 | LanceDB vector + native BM25 FTS, fused with hand-rolled RRF | Embedded, no Docker; two searches fused in Python (`rag/fusion.py`). |
 | Embeddings | BGE-M3 (self-hosted via FlagEmbedding) | Multilingual; Bahasa-strong; no API-key dependency for the reviewer's first run. |
 | Reranker | BGE-M3 ColBERT head (since v5; was BGE-Reranker-v2-m3) | Late-interaction MaxSim — one model does embed + rerank, see v5-1. |
 | Knowledge graph | NetworkX (in-memory + JSON persist) | Kùzu archived; Memgraph license-locked; Neo4j too heavy. |
@@ -242,7 +242,7 @@ they lost. (Appended, not rewritten — the v4/v5 evolution above stays readable
 | Alternative | Why rejected |
 |---|---|
 | **Pi** (Node TUI runtime, the v6 detour) | Vertical-stack TUI only — no horizontal multi-pane layout for a dashboard; drags a Node runtime into the image. Removed from the repo (kept in git history). |
-| **Flue** (`@flue/sdk`, TS agent framework) | A 4–6 week rewrite that kills the Python substrate (PydanticAI, LangGraph, LanceDB hybrid with Tantivy BM25, ColBERT, Docling). |
+| **Flue** (`@flue/sdk`, TS agent framework) | A 4–6 week rewrite that kills the Python substrate (PydanticAI, LangGraph, LanceDB hybrid with native BM25 FTS, ColBERT, Docling). |
 | **Full TS + Bun rewrite** | `@lancedb/lancedb` on Bun is REST-only; no BM25/FTS in JS; no ColBERT in TS. Ecosystem gaps are non-negotiable. |
 
 `textual-serve` runs the **same** Textual app server-side and streams it to
