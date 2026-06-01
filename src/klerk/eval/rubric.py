@@ -148,10 +148,22 @@ def run(items: list[GoldenItem]) -> list[RubricItemResult]:
     return out
 
 
+# Locales that make up the brief's 20-item set (8 factual / 5 multi-hop /
+# 3 conflict / 2 Bahasa / 2 trick). Anything else (e.g. the self-added Japanese
+# stretch items, whose source docs are not in the corpus) is reported
+# separately so it never silently drags the headline mean.
+BRIEF_LOCALES = {"en", "id"}
+
+
 def aggregate(results: list[RubricItemResult]) -> dict[str, Any]:
-    """Group by locale + overall; mean each axis."""
+    """Group by locale + overall; mean each axis.
+
+    Reports three headline views: ``brief`` (the in-scope 20), ``stretch``
+    (out-of-scope items such as the Japanese set), and ``overall`` (all items,
+    kept for transparency).
+    """
     if not results:
-        return {"overall": {}, "by_locale": {}}
+        return {"overall": {}, "brief": {}, "stretch": {}, "by_locale": {}}
 
     def _mean(rows: list[RubricItemResult], attr: str) -> float:
         return sum(getattr(r, attr) for r in rows) / len(rows)
@@ -173,4 +185,12 @@ def aggregate(results: list[RubricItemResult]) -> dict[str, Any]:
         rows = [r for r in results if r.locale == loc]
         by_locale[loc] = _summary(rows)
 
-    return {"overall": _summary(results), "by_locale": by_locale}
+    brief_rows = [r for r in results if r.locale in BRIEF_LOCALES]
+    stretch_rows = [r for r in results if r.locale not in BRIEF_LOCALES]
+
+    return {
+        "overall": _summary(results),
+        "brief": _summary(brief_rows) if brief_rows else {},
+        "stretch": _summary(stretch_rows) if stretch_rows else {},
+        "by_locale": by_locale,
+    }

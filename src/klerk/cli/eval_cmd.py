@@ -76,7 +76,13 @@ def run_cmd(
         console.print(Rule("[bold]klerk 5-axis rubric[/bold]", style="green"))
         results = rubric.run(items)
         agg = rubric.aggregate(results)
-        console.print(_render_axis_table("Overall (all items)", agg["overall"]))
+        # Headline is the brief's in-scope 20; the out-of-corpus stretch set
+        # (e.g. Japanese) is reported separately so it never silently drags it.
+        if agg.get("brief"):
+            console.print(_render_axis_table("Brief set (in scope)", agg["brief"]))
+        if agg.get("stretch"):
+            console.print(_render_axis_table(
+                "Stretch set (out of corpus — source docs not ingested)", agg["stretch"]))
         if agg["by_locale"]:
             for loc, summary in agg["by_locale"].items():
                 console.print(_render_axis_table(f"locale = {loc}", summary))

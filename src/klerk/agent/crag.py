@@ -28,8 +28,8 @@ from klerk.agent.prompts.system import (
     KLERK_SYSTEM,
 )
 from klerk.agent.schemas import (
-    CitedAnswer,
     Chunk,
+    CitedAnswer,
     DecomposedQuery,
     GroundingJudgment,
 )
@@ -99,13 +99,17 @@ def _answer_with_citations(
     text = response.choices[0].message.content or ""
     citations = sorted({f"{m.group(1)}:{m.group(2)}" for m in CITATION_RE.finditer(text)})
 
-    # Confidence heuristic: 1.0 if every retrieved chunk had its id cited at least once,
-    # else fraction-cited * 0.9 (cap below 1.0 so it never claims perfection).
-    if chunks:
-        cited = sum(1 for c in chunks if c.chunk_id in citations)
-        confidence = min(1.0, cited / len(chunks)) * 0.9 if cited < len(chunks) else 1.0
-    else:
+    # Confidence reflects how well-grounded the answer is. Crucially, the
+    # retrieval-pool size (k_final) is NOT the denominator: citing 2 of 8
+    # retrieved chunks is the normal *good* case, not 25% confidence. Scale by
+    # the answer's own distinct grounded sources, capped below 1.0 for a single
+    # source. An uncited answer (including a correct "I don't know" refusal)
+    # gets 0.0, matching the orchestrator path's contract.
+    if not chunks or not citations:
         confidence = 0.0
+    else:
+        distinct_docs = len({c.split(":", 1)[0] for c in citations})
+        confidence = min(1.0, 0.7 + 0.15 * distinct_docs)
 
     return CitedAnswer(answer=text.strip(), citations=citations, confidence=confidence, locale=locale)
 
