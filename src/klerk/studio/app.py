@@ -120,12 +120,20 @@ class KlerkStudio(App):
     .-narrow #right-rail > SparkGraph { height: 14; }
     /* shed low-priority status items so the bar never truncates the model */
     .-narrow #status-ctx, .-narrow #status-sync { display: none; }
+
+    /* ── zoom: full-screen chat (ctrl+f) — hide the rails, expand chat ── */
+    /* Works at any width: collapse the grid to one column and drop the side
+       panes so the chat pane fills the floor. The phone-demo money shot. */
+    .-zoom #studio-grid { grid-size: 1 1; grid-columns: 1fr; }
+    .-zoom #files-pane, .-zoom #right-rail { display: none; }
+    .-zoom #chat-pane { width: 1fr; height: 1fr; }
     """
     )
 
     BINDINGS = [
         Binding("ctrl+q", "quit", "quit"),
         Binding("ctrl+r", "reload", "reload"),
+        Binding("ctrl+f", "zoom_chat", "full-screen chat"),
         Binding("f1", "splash", "about"),
     ]
 
@@ -205,6 +213,28 @@ class KlerkStudio(App):
 
     def action_splash(self) -> None:
         self.push_screen(SplashScreen())
+
+    def action_zoom_chat(self) -> None:
+        """Toggle full-screen chat: hide the side rails, expand the chat pane.
+
+        No-op in the compact layout (already chat-only). Focuses the chat input
+        on the way in so the operator can type immediately.
+        """
+        if self._use_lite_layout:
+            return
+        self.screen.toggle_class("-zoom")
+        if self.screen.has_class("-zoom"):
+            try:
+                self.query_one("#chat-input").focus()
+            except Exception:  # noqa: BLE001 — focus is best-effort
+                pass
+
+    def on_live_chat_ctx_tokens(self, message: LiveChat.CtxTokens) -> None:
+        """Reflect the running conversation token estimate in the status bar."""
+        try:
+            self.query_one(StatusBar).set_ctx_tokens(message.tokens)
+        except Exception:  # noqa: BLE001 — status bar is best-effort
+            pass
 
 
 # ─── Entry points ─────────────────────────────────────────────────────────────

@@ -28,6 +28,7 @@ from typing import Any
 from textual import work
 from textual.app import ComposeResult
 from textual.containers import Container, VerticalScroll
+from textual.message import Message
 from textual.widgets import Collapsible, Input, LoadingIndicator, Markdown, Static
 
 _RENDER_INTERVAL = 0.1  # seconds between streaming re-renders (~10fps)
@@ -35,6 +36,14 @@ _RENDER_INTERVAL = 0.1  # seconds between streaming re-renders (~10fps)
 
 class LiveChat(Container):
     """Input + scrollable message log wired to the orchestrator or /chat SSE."""
+
+    class CtxTokens(Message):
+        """Posted with a running estimate of the conversation's token footprint
+        so the status bar can show live context usage."""
+
+        def __init__(self, tokens: int) -> None:
+            super().__init__()
+            self.tokens = tokens
 
     DEFAULT_CSS = """
     LiveChat {
@@ -102,6 +111,13 @@ class LiveChat(Container):
         self._answer_buf = ""
         self._dirty = False
         self._last_render = 0.0
+        # Running char count of the whole conversation; /4 ≈ tokens, matching the
+        # SessionStore budget heuristic (api/session.py _approx_tokens).
+        self._ctx_chars = 0
+
+    def _emit_ctx(self) -> None:
+        """Post the running conversation token estimate to the status bar."""
+        self.post_message(self.CtxTokens(max(0, self._ctx_chars // 4)))
 
     def compose(self) -> ComposeResult:
         self.border_title = f"live chat · {self.mode}"
@@ -139,6 +155,8 @@ class LiveChat(Container):
         await self._mount(self._answer_md)
         self._dirty = False
         self._last_render = 0.0
+        self._ctx_chars += len(query)
+        self._emit_ctx()
         self._set_busy(True)
         if self.mode == "full":
             self._run_full(query)
@@ -197,6 +215,8 @@ class LiveChat(Container):
         elif event == "done":
             self._set_busy(False)
             self._flush_answer()  # final render of any buffered tail
+            self._ctx_chars += len(self._answer_buf)
+            self._emit_ctx()
             if self._answer_md is not None:
                 self._answer_md.remove_class("-streaming")
             await self._mount(

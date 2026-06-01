@@ -70,6 +70,46 @@ async def test_lite_layout_is_chat_only() -> None:
 
 
 @pytest.mark.asyncio
+async def test_zoom_chat_toggles_full_screen() -> None:
+    """ctrl+f toggles the -zoom class so the chat pane fills the floor."""
+    app = KlerkStudio(mode="lite", show_splash=False)
+    async with app.run_test(size=WIDE) as pilot:
+        assert not app.screen.has_class("-zoom")
+        await pilot.press("ctrl+f")
+        await pilot.pause()
+        assert app.screen.has_class("-zoom")
+        # Side rails are still mounted but hidden via CSS; chat stays.
+        assert app.query(LiveChat)
+        await pilot.press("ctrl+f")
+        await pilot.pause()
+        assert not app.screen.has_class("-zoom")
+
+
+@pytest.mark.asyncio
+async def test_ctx_tokens_flow_to_status_bar(monkeypatch) -> None:
+    """A chat turn posts a CtxTokens estimate that the status bar reflects."""
+
+    async def fake_arun(query, *, session_id, locale="en", history=None):  # noqa: ANN001
+        yield {"event": "token", "data": json.dumps({"text": "hello there world"})}
+        yield {"event": "done", "data": json.dumps({"tool_hops": 0, "total_ms": 1.0})}
+
+    import klerk.agent.orchestrator as orch
+
+    monkeypatch.setattr(orch, "arun", fake_arun)
+
+    app = KlerkStudio(mode="lite", show_splash=False)
+    async with app.run_test(size=WIDE) as pilot:
+        await pilot.pause()
+        chat = app.query_one(LiveChat)
+        inp = chat.query_one("#chat-input", Input)
+        await chat.on_input_submitted(Input.Submitted(inp, "what is the policy?"))
+        for _ in range(4):
+            await pilot.pause(0.1)
+        bar = app.query_one(StatusBar)
+        assert bar._ctx_tokens > 0  # query + answer chars counted
+
+
+@pytest.mark.asyncio
 async def test_files_tree_handles_missing_roots(tmp_path, monkeypatch) -> None:
     """A fresh checkout (no corpus/state dirs) still composes."""
     monkeypatch.setenv("KLERK_CORPUS_DIR", str(tmp_path / "nope"))
