@@ -13,18 +13,27 @@ from textual.containers import Center, Middle
 from textual.screen import ModalScreen
 from textual.widgets import Static
 
+# Solid full-block glyphs (no thin box-drawing outline) — renders clean and
+# legible on mobile terminals where the ╔═╗ shadow font looked jagged. 23 cols
+# wide so it never clips on a ~50-col phone screen.
 LOGO = r"""
- ██╗  ██╗██╗     ███████╗██████╗ ██╗  ██╗
- ██║ ██╔╝██║     ██╔════╝██╔══██╗██║ ██╔╝
- █████╔╝ ██║     █████╗  ██████╔╝█████╔╝
- ██╔═██╗ ██║     ██╔══╝  ██╔══██╗██╔═██╗
- ██║  ██╗███████╗███████╗██║  ██║██║  ██╗
- ╚═╝  ╚═╝╚══════╝╚══════╝╚═╝  ╚═╝╚═╝  ╚═╝
+█  █  █    ███  ██   █  █
+█ █   █    █    █ █  █ █
+██    █    ██   ██   ██
+█ █   █    █    █ █  █ █
+█  █  ███  ███  █ █  █  █
 """
 
-TOOLS = [
-    "search_hybrid", "extract_actions", "draft_doc",
-    "scan_conflicts", "ingest_path", "sync_drive",
+# One consolidated capability line — tools and skills overlapped (search_hybrid
+# ≈ hybrid retrieval, scan_conflicts ≈ conflict scan, etc.), so collapse to the
+# six things klerk actually does, named once.
+CAPABILITIES = [
+    "hybrid retrieval",
+    "action items",
+    "doc drafting",
+    "conflict scan",
+    "knowledge graph",
+    "drive sync",
 ]
 
 
@@ -43,7 +52,8 @@ class SplashScreen(ModalScreen[None]):
     SplashScreen #inventory {
         text-align: center;
         margin-top: 1;
-        width: 64;
+        width: auto;
+        max-width: 100%;
     }
     SplashScreen #hint {
         color: $text-muted;
@@ -53,15 +63,16 @@ class SplashScreen(ModalScreen[None]):
     """
 
     def compose(self) -> ComposeResult:
-        tools = "  ".join(f"[$secondary]{t}[/]" for t in TOOLS)
+        # Two capability rows of three so nothing clips on a narrow phone.
+        row1 = "  ·  ".join(f"[$secondary]{c}[/]" for c in CAPABILITIES[:3])
+        row2 = "  ·  ".join(f"[$secondary]{c}[/]" for c in CAPABILITIES[3:])
         body = (
             f"{LOGO}\n"
             "[b $accent]document intelligence agent[/]\n"
-            "[dim]chat with your knowledge — grounded · cited · multilingual[/dim]\n\n"
-            f"[dim]tools[/]    {tools}\n"
-            "[dim]skills[/]   [$secondary]hybrid retrieval · conflict scan · action items · "
-            "doc-writer · knowledge graph · drive sync[/]\n\n"
-            "[dim]engine[/] in-process (lite)    [dim]surfaces[/] terminal · browser"
+            "[dim]grounded · cited · multilingual[/dim]\n\n"
+            f"{row1}\n{row2}\n\n"
+            "[dim]engine[/] in-process (lite)\n"
+            "[dim]surfaces[/] terminal · browser"
         )
         with Middle(), Center():
             yield Static(body, id="inventory", markup=True)
